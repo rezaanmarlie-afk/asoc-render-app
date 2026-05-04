@@ -1,4 +1,3 @@
-
 import os
 import io
 import re
@@ -19,19 +18,12 @@ load_dotenv()
 SMARTSHEET_TOKEN = os.getenv("SMARTSHEET_ACCESS_TOKEN", "").strip()
 SHEET_ID = os.getenv("SMARTSHEET_SHEET_ID", "6033225274419076").strip()
 SHEET_LINK = os.getenv("SMARTSHEET_SHEET_LINK", "https://app.smartsheet.com/sheets/Xvm992gjVPMChMhPGRVx85Gr24jqH2g45pj5wCH1").strip()
-
-# Dual-sheet model:
-# SOURCE sheet = existing ASR / operational demand sheet.
-# GOVERNANCE sheet = clean ASOC Demand Governance Register template.
-GOVERNANCE_SHEET_ID = os.getenv("SMARTSHEET_GOVERNANCE_SHEET_ID", "").strip()
-GOVERNANCE_SHEET_LINK = os.getenv("SMARTSHEET_GOVERNANCE_SHEET_LINK", "").strip()
-
 BASE_URL = "https://api.smartsheet.com/2.0"
 
 os.makedirs("static", exist_ok=True)
 os.makedirs("templates", exist_ok=True)
 
-app = FastAPI(title="ASOC Demand Governance Control Tower", version="3.0")
+app = FastAPI(title="Enterprise ASOC Demand Manager", version="2.0")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
@@ -85,7 +77,7 @@ def infer_key_columns(columns: List[str]) -> Dict[str, Optional[str]]:
                     return col
         return None
     return {
-        "reference": pick(["asr numbers auto", "asr number auto", "reference", "demand id", "id", "number"]),
+        "reference": pick(["asr numbers auto","reference", "demand id", "id", "number"]),
         "status": pick(["status", "state", "stage"]),
         "priority": pick(["priority", "severity", "urgency", "criticality"]),
         "assignee": pick(["assignee", "assigned", "owner", "resource", "responsible"]),
@@ -114,6 +106,7 @@ def parse_date(value: Any) -> Optional[pd.Timestamp]:
 
 
 def safe_float(value: Any, default: float = 0.0) -> float:
+    """Convert values to float without allowing NaN/NaT/inf to leak into analytics."""
     try:
         if value is None or pd.isna(value):
             return default
@@ -138,6 +131,7 @@ def is_closed(value: Any) -> bool:
 
 
 def safe_age_days(value: Any) -> Optional[int]:
+    """Return demand age in days, safely handling blank/invalid dates, NaT and NaN."""
     if value is None or pd.isna(value):
         return None
     try:
@@ -193,10 +187,6 @@ def series_counts(df: pd.DataFrame, col: Optional[str], limit: int = 20) -> List
     return [{"name": k, "value": int(v)} for k, v in s.value_counts().head(limit).items()]
 
 
-def clean_public_df(df: pd.DataFrame) -> pd.DataFrame:
-    return df.drop(columns=[c for c in df.columns if c.endswith("_parsed")], errors="ignore").where(pd.notnull(df), "")
-
-
 class DemandPayload(BaseModel):
     values: Dict[str, Any]
     to_top: bool = True
@@ -222,31 +212,21 @@ class FilterPayload(BaseModel):
     limit: int = 500
 
 
-class GovernancePayload(BaseModel):
-    business_outcome: str = ""
-    urgency_reason: str = ""
-    discussion_summary: str = ""
-    meeting_attendees: str = ""
-    scope_clear: bool = False
-    scope_clear_detail: str = ""
-    dependencies_known: bool = False
-    dependencies_known_detail: str = ""
-    data_available: bool = False
-    data_available_detail: str = ""
-    api_ready: bool = False
-    api_ready_detail: str = ""
-    nfr_defined: bool = False
-    nfr_defined_detail: str = ""
-    business_value: int = 5
-    time_criticality: int = 5
-    risk_reduction: int = 5
-    job_size: int = 5
-    capacity_impact: str = "Medium"
-    stakeholder_decision: str = "Refine"
-    next_action: str = ""
-    action_owner: str = ""
-    target_pi: str = ""
-    recommendation_override: str = ""
+@app.get("/", response_class=HTMLResponse)
+def home(request: Request):
+    return templates.TemplateResponse("index.html", {"request": request, "sheet_id": SHEET_ID, "sheet_link": SHEET_LINK})
+
+
+@app.get("/api/sheet")
+def api_sheet():
+    sheet, df, keys = build_dataframe()
+    public = clean_public_df(df)
+    return {"sheet_name": sheet.get("name"), "sheet_id": SHEET_ID, "permalink": sheet.get("permalink") or SHEET_LINK, "columns": sheet.get("columns", []), "column_titles": [c["title"] for c in sheet.get("columns", [])], "key_columns": keys, "rows": public.to_dict("records")}
+
+
+
+def clean_public_df(df: pd.DataFrame) -> pd.DataFrame:
+    return df.drop(columns=[c for c in df.columns if c.endswith("_parsed")], errors="ignore").where(pd.notnull(df), "")
 
 
 def dashboard_from_df(sheet: Dict[str, Any], df: pd.DataFrame, keys: Dict[str, Optional[str]]) -> Dict[str, Any]:
@@ -342,6 +322,11 @@ def apply_filter_rules(df: pd.DataFrame, payload: FilterPayload) -> pd.DataFrame
         for m in masks[1:]: combined = combined & m
     return df[combined].copy()
 
+
+
+# -----------------------------
+# V8: Quality, Capacity and Risk Engines
+# -----------------------------
 
 def _first_existing(keys: Dict[str, Optional[str]], df: pd.DataFrame, names: List[str]) -> Optional[str]:
     for k in names:
@@ -458,6 +443,8 @@ def capacity_from_df(df: pd.DataFrame, keys: Dict[str, Optional[str]]) -> Dict[s
     if df.empty or not assignee_col:
         return {"team": [], "summary": {"team_load_percent": 0, "overloaded_resources": 0, "active_resources": 0}}
 
+    # Real Smartsheet data can contain blanks, NaT and NaN. The capacity engine
+    # must never allow those values to leak into integer conversion.
     open_df = df[~df["_is_closed"].fillna(False)].copy() if "_is_closed" in df.columns else df.copy()
     open_df["_assignee_norm"] = open_df[assignee_col].fillna("Unassigned").replace("", "Unassigned").astype(str)
 
@@ -466,6 +453,7 @@ def capacity_from_df(df: pd.DataFrame, keys: Dict[str, Optional[str]]) -> Dict[s
     for name, g in open_df.groupby("_assignee_norm", dropna=False):
         active = int(len(g))
         overdue = int(g["_is_overdue"].fillna(False).sum()) if "_is_overdue" in g.columns else 0
+
         if "_age_days" in g.columns:
             clean_ages = [safe_float(v, 0.0) for v in g["_age_days"].tolist() if not pd.isna(v)]
             avg_age = round(sum(clean_ages) / len(clean_ages), 1) if clean_ages else 0
@@ -510,354 +498,6 @@ def v8_insights_from_df(df: pd.DataFrame, keys: Dict[str, Optional[str]]) -> Dic
     return {"summary": {"total_demands": total, "ready_percent": round((ready/total)*100,1) if total else 0, "ready": ready, "needs_clarification": needs, "not_ready": not_ready, "high_risk": int(len(high_risk_df)) if total else 0, "team_load_percent": cap.get("summary",{}).get("team_load_percent",0), "overloaded_resources": cap.get("summary",{}).get("overloaded_resources",0)}, "quality_columns": quality_columns(keys, enriched), "capacity": cap, "charts": charts, "risk_items": risks, "rows": clean_public_df(enriched).to_dict("records")}
 
 
-
-def get_governance_sheet(include: str = "objectValue") -> Dict[str, Any]:
-    if not GOVERNANCE_SHEET_ID:
-        raise HTTPException(
-            status_code=500,
-            detail="SMARTSHEET_GOVERNANCE_SHEET_ID is not set in .env. Create the Governance Register sheet first and set this value."
-        )
-    params = {"include": include} if include else {}
-    return smartsheet("GET", f"/sheets/{GOVERNANCE_SHEET_ID}", params=params)
-
-
-def governance_template_columns() -> List[Dict[str, str]]:
-    return [
-        {"title": "Governance Record ID", "type": "TEXT_NUMBER"},
-        {"title": "Source Sheet ID", "type": "TEXT_NUMBER"},
-        {"title": "Source Row ID", "type": "TEXT_NUMBER"},
-        {"title": "Source Row Number", "type": "TEXT_NUMBER"},
-        {"title": "Source Sheet Link", "type": "TEXT_NUMBER"},
-        {"title": "ASR Number", "type": "TEXT_NUMBER"},
-        {"title": "Demand Title", "type": "TEXT_NUMBER"},
-        {"title": "Initiative Status", "type": "TEXT_NUMBER"},
-        {"title": "Portfolio / Domain", "type": "TEXT_NUMBER"},
-        {"title": "Requestor", "type": "TEXT_NUMBER"},
-        {"title": "Owner / Assignee", "type": "TEXT_NUMBER"},
-        {"title": "Priority", "type": "TEXT_NUMBER"},
-        {"title": "Created Date", "type": "DATE"},
-        {"title": "Current Health", "type": "TEXT_NUMBER"},
-
-        {"title": "RTE Discussion Date", "type": "DATE"},
-        {"title": "RTE Discussion Summary", "type": "TEXT_NUMBER"},
-        {"title": "Meeting Attendees", "type": "TEXT_NUMBER"},
-
-        {"title": "Business Outcome", "type": "TEXT_NUMBER"},
-        {"title": "Urgency Reason", "type": "TEXT_NUMBER"},
-
-        {"title": "Scope Clear", "type": "CHECKBOX"},
-        {"title": "Scope Clear Detail", "type": "TEXT_NUMBER"},
-        {"title": "Dependencies Known", "type": "CHECKBOX"},
-        {"title": "Dependencies Known Detail", "type": "TEXT_NUMBER"},
-        {"title": "Data Available", "type": "CHECKBOX"},
-        {"title": "Data Available Detail", "type": "TEXT_NUMBER"},
-        {"title": "API Ready", "type": "CHECKBOX"},
-        {"title": "API Ready Detail", "type": "TEXT_NUMBER"},
-        {"title": "NFR Defined", "type": "CHECKBOX"},
-        {"title": "NFR Defined Detail", "type": "TEXT_NUMBER"},
-
-        {"title": "Demand Readiness", "type": "PICKLIST"},
-        {"title": "Readiness Score", "type": "TEXT_NUMBER"},
-        {"title": "Readiness Gaps", "type": "TEXT_NUMBER"},
-        {"title": "Readiness Detail Summary", "type": "TEXT_NUMBER"},
-
-        {"title": "Business Value", "type": "TEXT_NUMBER"},
-        {"title": "Time Criticality", "type": "TEXT_NUMBER"},
-        {"title": "Risk Reduction", "type": "TEXT_NUMBER"},
-        {"title": "Job Size", "type": "TEXT_NUMBER"},
-        {"title": "WSJF Score", "type": "TEXT_NUMBER"},
-
-        {"title": "Capacity Impact", "type": "PICKLIST"},
-        {"title": "Target PI", "type": "TEXT_NUMBER"},
-        {"title": "RTE Recommendation", "type": "TEXT_NUMBER"},
-        {"title": "Stakeholder Decision", "type": "PICKLIST"},
-        {"title": "Next Action", "type": "TEXT_NUMBER"},
-        {"title": "Action Owner", "type": "TEXT_NUMBER"},
-        {"title": "Last RTE Update", "type": "TEXT_NUMBER"},
-    ]
-
-
-def governance_picklist_options(title: str) -> Optional[List[str]]:
-    return {
-        "Demand Readiness": ["Ready", "Not Ready"],
-        "Capacity Impact": ["Low", "Medium", "High"],
-        "Stakeholder Decision": [
-            "Commit",
-            "Refine",
-            "Defer",
-            "Reject",
-            "Escalate",
-            "Needs Architecture Review",
-            "Needs Business Case",
-            "Needs Capacity Trade-off",
-        ],
-    }.get(title)
-
-
-def governance_template_status() -> Dict[str, Any]:
-    sheet = get_governance_sheet(include="")
-    _, by_title = column_maps(sheet)
-    expected = governance_template_columns()
-    missing = [c for c in expected if c["title"].strip().lower() not in by_title]
-    existing = [c["title"] for c in expected if c["title"].strip().lower() in by_title]
-    return {
-        "governance_sheet_name": sheet.get("name"),
-        "governance_sheet_id": GOVERNANCE_SHEET_ID,
-        "governance_sheet_link": sheet.get("permalink") or GOVERNANCE_SHEET_LINK,
-        "expected_columns": expected,
-        "existing_columns": existing,
-        "missing_columns": missing,
-        "is_ready": len(missing) == 0,
-    }
-
-
-def create_governance_register_row(source_row_id: int, payload: GovernancePayload) -> Dict[str, Any]:
-    """
-    Create a new governance record in the separate Governance Register sheet.
-    The source ASR sheet is not modified.
-    """
-    source_sheet = get_sheet(include="objectValue")
-    source_by_id, _ = column_maps(source_sheet)
-    keys = infer_key_columns([c.get("title", "") for c in source_sheet.get("columns", [])])
-
-    source_row = None
-    for row in source_sheet.get("rows", []):
-        if int(row.get("id")) == int(source_row_id):
-            source_row = row
-            break
-
-    if source_row is None:
-        raise HTTPException(status_code=404, detail=f"Source row {source_row_id} not found in source ASR sheet")
-
-    source_record = row_to_dict(source_row, source_by_id)
-
-    gov_sheet = get_governance_sheet(include="")
-    _, gov_by_title = column_maps(gov_sheet)
-
-    readiness = governance_readiness(payload)
-    wsjf = governance_wsjf(payload)
-    recommendation = governance_recommendation(payload, readiness["status"], wsjf)
-
-    def source_value(key: str) -> str:
-        col = keys.get(key)
-        return str(source_record.get(col, "") or "") if col else ""
-
-    asr_number = source_value("reference")
-    demand_title = source_value("demand")
-    governance_record_id = f"{asr_number or source_row_id}-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
-
-    values = {
-        "Governance Record ID": governance_record_id,
-        "Source Sheet ID": SHEET_ID,
-        "Source Row ID": source_row.get("id"),
-        "Source Row Number": source_row.get("rowNumber"),
-        "Source Sheet Link": SHEET_LINK,
-
-        "ASR Number": asr_number,
-        "Demand Title": demand_title,
-        "Initiative Status": source_value("initiative_status") or source_value("status"),
-        "Portfolio / Domain": source_value("portfolio"),
-        "Requestor": source_value("requestor"),
-        "Owner / Assignee": source_value("assignee"),
-        "Priority": source_value("priority"),
-        "Created Date": source_value("created")[:10] if source_value("created") else "",
-        "Current Health": source_record.get("_health", ""),
-
-        "RTE Discussion Date": datetime.now().strftime("%Y-%m-%d"),
-        "RTE Discussion Summary": payload.discussion_summary,
-        "Meeting Attendees": payload.meeting_attendees,
-
-        "Business Outcome": payload.business_outcome,
-        "Urgency Reason": payload.urgency_reason,
-
-        "Scope Clear": payload.scope_clear,
-        "Scope Clear Detail": payload.scope_clear_detail,
-        "Dependencies Known": payload.dependencies_known,
-        "Dependencies Known Detail": payload.dependencies_known_detail,
-        "Data Available": payload.data_available,
-        "Data Available Detail": payload.data_available_detail,
-        "API Ready": payload.api_ready,
-        "API Ready Detail": payload.api_ready_detail,
-        "NFR Defined": payload.nfr_defined,
-        "NFR Defined Detail": payload.nfr_defined_detail,
-
-        "Demand Readiness": readiness["status"],
-        "Readiness Score": readiness["score"],
-        "Readiness Gaps": readiness["gaps"],
-        "Readiness Detail Summary": readiness["detail_summary"],
-
-        "Business Value": payload.business_value,
-        "Time Criticality": payload.time_criticality,
-        "Risk Reduction": payload.risk_reduction,
-        "Job Size": payload.job_size,
-        "WSJF Score": wsjf,
-
-        "Capacity Impact": payload.capacity_impact,
-        "Target PI": payload.target_pi,
-        "RTE Recommendation": recommendation,
-        "Stakeholder Decision": payload.stakeholder_decision,
-        "Next Action": payload.next_action,
-        "Action Owner": payload.action_owner,
-        "Last RTE Update": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-    }
-
-    missing_template_columns = []
-    cells = []
-    for title, value in values.items():
-        col = gov_by_title.get(title.strip().lower())
-        if col:
-            cells.append({"columnId": col["id"], "value": value, "strict": False})
-        else:
-            missing_template_columns.append(title)
-
-    if missing_template_columns:
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "message": "Governance Register template is missing required columns. Create/update the Governance Register sheet using the provided template.",
-                "missing_columns": missing_template_columns,
-                "governance_sheet_id": GOVERNANCE_SHEET_ID,
-            },
-        )
-
-    result = smartsheet("POST", f"/sheets/{GOVERNANCE_SHEET_ID}/rows", json=[{"toTop": True, "cells": cells}])
-
-    comment_text = (
-        f"Submitted to ASOC Demand Governance Register\\n"
-        f"Governance Record ID: {governance_record_id}\\n"
-        f"Readiness: {readiness['status']} ({readiness['score']}%)\\n"
-        f"WSJF Score: {wsjf}\\n"
-        f"RTE Recommendation: {recommendation}\\n"
-        f"Stakeholder Decision: {payload.stakeholder_decision}\\n"
-        f"Next Action: {payload.next_action}\\n"
-        f"Action Owner: {payload.action_owner}\\n"
-        f"Target PI: {payload.target_pi}"
-    )
-
-    source_comment_added = False
-    try:
-        smartsheet("POST", f"/sheets/{SHEET_ID}/rows/{source_row_id}/discussions", json={"comment": {"text": comment_text}})
-        source_comment_added = True
-    except Exception:
-        source_comment_added = False
-
-    return {
-        "status": "created",
-        "governance_record_id": governance_record_id,
-        "source_row_id": source_row_id,
-        "source_asr_number": asr_number,
-        "readiness": readiness,
-        "wsjf_score": wsjf,
-        "rte_recommendation": recommendation,
-        "governance_sheet_id": GOVERNANCE_SHEET_ID,
-        "governance_sheet_link": gov_sheet.get("permalink") or GOVERNANCE_SHEET_LINK,
-        "smartsheet": result,
-        "source_comment_added": source_comment_added,
-    }
-
-
-def governance_readiness(payload: GovernancePayload) -> Dict[str, Any]:
-    checks = {
-        "Scope Clear": {
-            "ok": payload.scope_clear,
-            "detail": payload.scope_clear_detail,
-            "column": "Scope Clear Detail",
-        },
-        "Dependencies Known": {
-            "ok": payload.dependencies_known,
-            "detail": payload.dependencies_known_detail,
-            "column": "Dependencies Known Detail",
-        },
-        "Data / Access Available": {
-            "ok": payload.data_available,
-            "detail": payload.data_available_detail,
-            "column": "Data Available Detail",
-        },
-        "API / Integration Ready": {
-            "ok": payload.api_ready,
-            "detail": payload.api_ready_detail,
-            "column": "API Ready Detail",
-        },
-        "NFRs Defined": {
-            "ok": payload.nfr_defined,
-            "detail": payload.nfr_defined_detail,
-            "column": "NFR Defined Detail",
-        },
-    }
-
-    gaps = [k for k, v in checks.items() if not v["ok"]]
-    missing_details = [k for k, v in checks.items() if v["ok"] and not str(v.get("detail", "")).strip()]
-    ready_count = sum(1 for v in checks.values() if v["ok"])
-
-    status = "Ready" if not gaps else "Not Ready"
-
-    return {
-        "status": status,
-        "score": round((ready_count / len(checks)) * 100, 0),
-        "gaps": ", ".join(gaps) if gaps else "None",
-        "missing_details": ", ".join(missing_details) if missing_details else "None",
-        "checks": checks,
-        "detail_summary": "\n".join([
-            f"{name}: {'Yes' if item['ok'] else 'No'} - {str(item.get('detail', '')).strip() or 'No detail captured'}"
-            for name, item in checks.items()
-        ]),
-    }
-
-
-def governance_wsjf(payload: GovernancePayload) -> float:
-    return round((int(payload.business_value) + int(payload.time_criticality) + int(payload.risk_reduction)) / max(1, int(payload.job_size or 1)), 2)
-
-
-def governance_recommendation(payload: GovernancePayload, readiness: str, wsjf: float) -> str:
-    if payload.recommendation_override:
-        return payload.recommendation_override
-    impact = (payload.capacity_impact or "Medium").strip().lower()
-    if readiness != "Ready":
-        return "Refine"
-    if wsjf >= 7 and impact in {"low", "medium"}:
-        return "Commit"
-    if wsjf >= 7 and impact == "high":
-        return "Escalate / Capacity Trade-off Required"
-    if 4 <= wsjf < 7:
-        return "Defer / Reassess Priority"
-    return "Reject / Park"
-
-
-def update_existing_smartsheet_columns(row_id: int, values: Dict[str, Any]) -> Dict[str, Any]:
-    sheet = get_sheet(include="")
-    _, by_title = column_maps(sheet)
-    cells = []
-    missing = []
-    for title, value in values.items():
-        col = by_title.get(title.strip().lower())
-        if col:
-            cells.append({"columnId": col["id"], "value": value, "strict": False})
-        else:
-            missing.append(title)
-    if not cells:
-        raise HTTPException(status_code=400, detail={"message": "No governance columns were found in Smartsheet. Add the recommended columns first.", "missing_columns": missing})
-    result = smartsheet("PUT", f"/sheets/{SHEET_ID}/rows", json=[{"id": row_id, "cells": cells}])
-    return {"result": result, "updated_columns": [k for k in values.keys() if k not in missing], "missing_columns": missing}
-
-
-@app.get("/", response_class=HTMLResponse)
-def home(request: Request):
-    return templates.TemplateResponse("index.html", {
-        "request": request,
-        "sheet_id": SHEET_ID,
-        "sheet_link": SHEET_LINK,
-        "governance_sheet_id": GOVERNANCE_SHEET_ID or "Not configured",
-        "governance_sheet_link": GOVERNANCE_SHEET_LINK or "#",
-    })
-
-
-@app.get("/api/sheet")
-def api_sheet():
-    sheet, df, keys = build_dataframe()
-    public = clean_public_df(enrich_quality(df, keys))
-    return {"sheet_name": sheet.get("name"), "sheet_id": SHEET_ID, "permalink": sheet.get("permalink") or SHEET_LINK, "columns": sheet.get("columns", []), "column_titles": [c["title"] for c in sheet.get("columns", [])], "key_columns": keys, "rows": public.to_dict("records")}
-
-
 @app.get("/api/dashboard")
 def api_dashboard():
     sheet, df, keys = build_dataframe()
@@ -899,7 +539,7 @@ def api_search(q: str = Query(""), status: str = Query(""), assignee: str = Quer
     if health:
         filtered = filtered[filtered["_health"].fillna("").astype(str).str.lower() == health.lower()]
     summary = {"count": int(len(filtered)), "open": int((~filtered["_is_closed"]).sum()) if len(filtered) else 0, "overdue": int(filtered["_is_overdue"].sum()) if len(filtered) else 0, "avg_age": round(float(filtered["_age_days"].dropna().mean()), 1) if len(filtered) and not filtered["_age_days"].dropna().empty else 0}
-    result = clean_public_df(filtered).head(limit).to_dict("records")
+    result = filtered.drop(columns=[c for c in filtered.columns if c.endswith("_parsed")], errors="ignore").where(pd.notnull(filtered), "").head(limit).to_dict("records")
     return {"summary": summary, "rows": result, "key_columns": keys}
 
 
@@ -946,6 +586,7 @@ def update_row(row_id: int, payload: UpdatePayload):
 
 @app.get("/api/rows/{row_id}")
 def get_row_detail(row_id: int):
+    """Return one Smartsheet row with all columns and editable metadata."""
     sheet = get_sheet(include="objectValue")
     by_id, _ = column_maps(sheet)
     target = None
@@ -980,18 +621,39 @@ def get_row_detail(row_id: int):
     tmp_df["_age_days"] = tmp_df[keys.get("created")].apply(lambda v: safe_age_days(parse_date(v))) if keys.get("created") in tmp_df.columns else tmp_df.get("_created_at", pd.Series(dtype=str)).apply(lambda v: safe_age_days(parse_date(v)))
     tmp_df["_is_overdue"] = False
     quality = score_one_demand(tmp_df.iloc[0], quality_columns(keys, tmp_df))
-    return {"row_id": target.get("id"), "row_number": target.get("rowNumber"), "created_at": target.get("createdAt"), "modified_at": target.get("modifiedAt"), "record": record, "fields": fields, "key_columns": keys, "quality": quality}
+    return {
+        "row_id": target.get("id"),
+        "row_number": target.get("rowNumber"),
+        "created_at": target.get("createdAt"),
+        "modified_at": target.get("modifiedAt"),
+        "record": record,
+        "fields": fields,
+        "key_columns": keys,
+        "quality": quality,
+    }
 
 
 @app.get("/api/rows/{row_id}/comments")
 def get_row_comments(row_id: int):
+    """Return Smartsheet row-level discussions/comments for a demand row.
+
+    Comments are not sheet columns in Smartsheet. They are stored as row discussions,
+    so this endpoint keeps them separate from field updates.
+    """
     data = smartsheet("GET", f"/sheets/{SHEET_ID}/rows/{row_id}/discussions", params={"include": "comments"})
     discussions = data.get("data", data.get("discussions", [])) if isinstance(data, dict) else []
     comments = []
     for discussion in discussions or []:
         for comment in discussion.get("comments", []) or []:
             created_by = comment.get("createdBy") or comment.get("modifiedBy") or {}
-            comments.append({"discussion_id": discussion.get("id"), "comment_id": comment.get("id"), "text": comment.get("text", ""), "created_at": comment.get("createdAt") or comment.get("modifiedAt") or "", "created_by": created_by.get("name") or created_by.get("email") or "Smartsheet User", "email": created_by.get("email", "")})
+            comments.append({
+                "discussion_id": discussion.get("id"),
+                "comment_id": comment.get("id"),
+                "text": comment.get("text", ""),
+                "created_at": comment.get("createdAt") or comment.get("modifiedAt") or "",
+                "created_by": created_by.get("name") or created_by.get("email") or "Smartsheet User",
+                "email": created_by.get("email", ""),
+            })
     comments.sort(key=lambda x: x.get("created_at") or "")
     return {"row_id": row_id, "count": len(comments), "comments": comments, "raw_discussion_count": len(discussions or [])}
 
@@ -1009,6 +671,8 @@ def delete_row(row_id: int):
     return smartsheet("DELETE", f"/sheets/{SHEET_ID}/rows", params={"ids": row_id})
 
 
+
+
 @app.get("/api/quality_scores")
 def api_quality_scores():
     _, df, keys = build_dataframe()
@@ -1016,18 +680,15 @@ def api_quality_scores():
     v8 = v8_insights_from_df(enriched, keys)
     return {"summary": v8["summary"], "quality_columns": v8["quality_columns"], "rows": v8["rows"], "charts": v8["charts"]}
 
-
 @app.get("/api/capacity")
 def api_capacity():
     _, df, keys = build_dataframe()
     return capacity_from_df(enrich_quality(df, keys), keys)
 
-
 @app.get("/api/risk")
 def api_risk():
     _, df, keys = build_dataframe()
     return v8_insights_from_df(enrich_quality(df, keys), keys)
-
 
 @app.get("/api/insights")
 def api_insights():
@@ -1040,43 +701,17 @@ def api_insights():
     if not insights: insights.append("No critical demand management issues detected from the current dataset.")
     return {"summary": summary, "insights": insights, "top_risks": v8["risk_items"][:10]}
 
-
-@app.post("/api/governance/score")
-def api_governance_score(payload: GovernancePayload):
-    readiness = governance_readiness(payload)
-    wsjf = governance_wsjf(payload)
-    recommendation = governance_recommendation(payload, readiness["status"], wsjf)
-    return {"readiness": readiness, "wsjf_score": wsjf, "rte_recommendation": recommendation}
-
-
-@app.post("/api/governance/submit/{row_id}")
-def api_governance_submit(row_id: int, payload: GovernancePayload):
-    return create_governance_register_row(row_id, payload)
-
-
-@app.get("/api/governance/template-status")
-def api_governance_template_status():
-    return governance_template_status()
-
-
-@app.get("/api/governance/recommended-columns")
-def api_governance_recommended_columns():
-    return {"columns": governance_template_columns()}
-
-
 @app.get("/api/export/excel")
 def export_excel():
     sheet, df, keys = build_dataframe()
-    enriched = enrich_quality(df, keys)
     output = io.BytesIO()
-    clean = clean_public_df(enriched)
+    clean = df.drop(columns=[c for c in df.columns if c.endswith("_parsed")], errors="ignore")
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
         clean.to_excel(writer, sheet_name="Demand Register", index=False)
         dash = api_dashboard()
         pd.DataFrame([dash["metrics"]]).to_excel(writer, sheet_name="Executive Summary", index=False)
         for name, data in dash["charts"].items():
             pd.DataFrame(data).to_excel(writer, sheet_name=name[:31], index=False)
-        pd.DataFrame(api_governance_recommended_columns()["columns"], columns=["Recommended Governance Columns"]).to_excel(writer, sheet_name="Governance Columns", index=False)
     output.seek(0)
-    filename = f"asoc_demand_governance_export_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
+    filename = f"enterprise_demand_export_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
     return StreamingResponse(output, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": f"attachment; filename={filename}"})
