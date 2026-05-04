@@ -77,7 +77,7 @@ def infer_key_columns(columns: List[str]) -> Dict[str, Optional[str]]:
                     return col
         return None
     return {
-        "reference": pick(["asr numbers auto", "reference", "demand id", "id", "number"]),
+        "reference": pick(["asr numbers auto","reference", "demand id", "id", "number"]),
         "status": pick(["status", "state", "stage"]),
         "priority": pick(["priority", "severity", "urgency", "criticality"]),
         "assignee": pick(["assignee", "assigned", "owner", "resource", "responsible"]),
@@ -87,6 +87,7 @@ def infer_key_columns(columns: List[str]) -> Dict[str, Optional[str]]:
         "demand": pick(["demand", "request", "title", "summary", "name", "description"]),
         "due": pick(["due", "target", "deadline", "planned end", "end date"]),
         "portfolio": pick(["portfolio", "domain", "tribe", "area", "department"]),
+        "initiative_status": pick(["initiative status", "initiative status (auto)", "initiative_state"]),
     }
 
 
