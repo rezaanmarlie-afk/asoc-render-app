@@ -2,6 +2,7 @@
 import os
 import io
 import re
+import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -35,6 +36,13 @@ app = FastAPI(title="ASOC Demand Governance Control Tower", version="3.0")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
+APP_BUILD_VERSION = "LEAN18-TRUE-v2-SMARTSHEET-RETRY-2026-05-04"
+
+@app.get("/api/version")
+def api_version():
+    return {"version": APP_BUILD_VERSION, "governance_model": "lean18", "expected_columns": [c["title"] for c in governance_template_columns()]}
+
+
 
 def headers() -> Dict[str, str]:
     if not SMARTSHEET_TOKEN:
@@ -44,18 +52,54 @@ def headers() -> Dict[str, str]:
 
 def smartsheet(method: str, path: str, **kwargs):
     url = f"{BASE_URL}{path}"
-    try:
-        res = requests.request(method, url, headers=headers(), timeout=60, **kwargs)
-    except requests.RequestException as exc:
-        raise HTTPException(status_code=502, detail=f"Could not connect to Smartsheet API: {exc}")
-    if not res.ok:
-        raise HTTPException(status_code=res.status_code, detail={"url": url, "error": res.text})
-    return res.json() if res.text else {}
+
+    last_error = None
+    for attempt in range(1, 4):
+        try:
+            res = requests.request(method, url, headers=headers(), timeout=90, **kwargs)
+        except requests.RequestException as exc:
+            last_error = f"Could not connect to Smartsheet API: {exc}"
+            if attempt < 3:
+                time.sleep(1.5 * attempt)
+                continue
+            raise HTTPException(status_code=502, detail=last_error)
+
+        if res.ok:
+            return res.json() if res.text else {}
+
+        # Smartsheet 4004 is often transient or caused by heavy sheet reads.
+        # Retry a few times before surfacing the error.
+        try:
+            err_json = res.json()
+            error_code = err_json.get("errorCode")
+        except Exception:
+            err_json = res.text
+            error_code = None
+
+        last_error = {"url": url, "error": res.text, "attempt": attempt}
+
+        if error_code == 4004 and attempt < 3:
+            time.sleep(1.5 * attempt)
+            continue
+
+        raise HTTPException(status_code=res.status_code, detail=last_error)
+
+    raise HTTPException(status_code=502, detail=last_error or f"Unknown Smartsheet error calling {url}")
 
 
 def get_sheet(include: str = "objectValue") -> Dict[str, Any]:
     params = {"include": include} if include else {}
-    return smartsheet("GET", f"/sheets/{SHEET_ID}", params=params)
+    try:
+        return smartsheet("GET", f"/sheets/{SHEET_ID}", params=params)
+    except HTTPException as exc:
+        # If heavy source sheet read fails with include=objectValue, retry without include.
+        # Most of this app only needs displayValue/value, not objectValue.
+        if include:
+            try:
+                return smartsheet("GET", f"/sheets/{SHEET_ID}", params={})
+            except HTTPException:
+                raise exc
+        raise
 
 
 def column_maps(sheet: Dict[str, Any]) -> Tuple[Dict[int, Dict[str, Any]], Dict[str, Dict[str, Any]]]:
@@ -518,64 +562,43 @@ def get_governance_sheet(include: str = "objectValue") -> Dict[str, Any]:
             detail="SMARTSHEET_GOVERNANCE_SHEET_ID is not set in .env. Create the Governance Register sheet first and set this value."
         )
     params = {"include": include} if include else {}
-    return smartsheet("GET", f"/sheets/{GOVERNANCE_SHEET_ID}", params=params)
+    try:
+        return smartsheet("GET", f"/sheets/{GOVERNANCE_SHEET_ID}", params=params)
+    except HTTPException as exc:
+        if include:
+            try:
+                return smartsheet("GET", f"/sheets/{GOVERNANCE_SHEET_ID}", params={})
+            except HTTPException:
+                raise exc
+        raise
 
 
 def governance_template_columns() -> List[Dict[str, str]]:
+    """
+    TRUE Lean 18 ART Governance Register template.
+    The governance register sheet must contain only these 18 expected columns.
+    Detailed readiness fields from the UI are combined into Readiness Detail Summary.
+    """
     return [
-        {"title": "Governance Record ID", "type": "TEXT_NUMBER"},
-        {"title": "Source Sheet ID", "type": "TEXT_NUMBER"},
-        {"title": "Source Row ID", "type": "TEXT_NUMBER"},
-        {"title": "Source Row Number", "type": "TEXT_NUMBER"},
-        {"title": "Source Sheet Link", "type": "TEXT_NUMBER"},
         {"title": "ASR Number", "type": "TEXT_NUMBER"},
         {"title": "Demand Title", "type": "TEXT_NUMBER"},
-        {"title": "Initiative Status", "type": "TEXT_NUMBER"},
-        {"title": "Portfolio / Domain", "type": "TEXT_NUMBER"},
-        {"title": "Requestor", "type": "TEXT_NUMBER"},
-        {"title": "Owner / Assignee", "type": "TEXT_NUMBER"},
-        {"title": "Priority", "type": "TEXT_NUMBER"},
-        {"title": "Created Date", "type": "DATE"},
-        {"title": "Current Health", "type": "TEXT_NUMBER"},
-
+        {"title": "Source Row ID", "type": "TEXT_NUMBER"},
         {"title": "RTE Discussion Date", "type": "DATE"},
         {"title": "RTE Discussion Summary", "type": "TEXT_NUMBER"},
         {"title": "Meeting Attendees", "type": "TEXT_NUMBER"},
-
-        {"title": "Business Outcome", "type": "TEXT_NUMBER"},
-        {"title": "Urgency Reason", "type": "TEXT_NUMBER"},
-
-        {"title": "Scope Clear", "type": "CHECKBOX"},
-        {"title": "Scope Clear Detail", "type": "TEXT_NUMBER"},
-        {"title": "Dependencies Known", "type": "CHECKBOX"},
-        {"title": "Dependencies Known Detail", "type": "TEXT_NUMBER"},
-        {"title": "Data Available", "type": "CHECKBOX"},
-        {"title": "Data Available Detail", "type": "TEXT_NUMBER"},
-        {"title": "API Ready", "type": "CHECKBOX"},
-        {"title": "API Ready Detail", "type": "TEXT_NUMBER"},
-        {"title": "NFR Defined", "type": "CHECKBOX"},
-        {"title": "NFR Defined Detail", "type": "TEXT_NUMBER"},
-
         {"title": "Demand Readiness", "type": "PICKLIST"},
         {"title": "Readiness Score", "type": "TEXT_NUMBER"},
-        {"title": "Readiness Gaps", "type": "TEXT_NUMBER"},
         {"title": "Readiness Detail Summary", "type": "TEXT_NUMBER"},
-
         {"title": "Business Value", "type": "TEXT_NUMBER"},
         {"title": "Time Criticality", "type": "TEXT_NUMBER"},
         {"title": "Risk Reduction", "type": "TEXT_NUMBER"},
         {"title": "Job Size", "type": "TEXT_NUMBER"},
         {"title": "WSJF Score", "type": "TEXT_NUMBER"},
-
-        {"title": "Capacity Impact", "type": "PICKLIST"},
-        {"title": "Target PI", "type": "TEXT_NUMBER"},
         {"title": "RTE Recommendation", "type": "TEXT_NUMBER"},
         {"title": "Stakeholder Decision", "type": "PICKLIST"},
         {"title": "Next Action", "type": "TEXT_NUMBER"},
         {"title": "Action Owner", "type": "TEXT_NUMBER"},
-        {"title": "Last RTE Update", "type": "TEXT_NUMBER"},
     ]
-
 
 def governance_picklist_options(title: str) -> Optional[List[str]]:
     return {
@@ -647,44 +670,22 @@ def create_governance_register_row(source_row_id: int, payload: GovernancePayloa
     governance_record_id = f"{asr_number or source_row_id}-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
 
     values = {
-        "Governance Record ID": governance_record_id,
-        "Source Sheet ID": SHEET_ID,
-        "Source Row ID": source_row.get("id"),
-        "Source Row Number": source_row.get("rowNumber"),
-        "Source Sheet Link": SHEET_LINK,
-
         "ASR Number": asr_number,
         "Demand Title": demand_title,
-        "Initiative Status": source_value("initiative_status") or source_value("status"),
-        "Portfolio / Domain": source_value("portfolio"),
-        "Requestor": source_value("requestor"),
-        "Owner / Assignee": source_value("assignee"),
-        "Priority": source_value("priority"),
-        "Created Date": source_value("created")[:10] if source_value("created") else "",
-        "Current Health": source_record.get("_health", ""),
+        "Source Row ID": source_row.get("id"),
 
         "RTE Discussion Date": datetime.now().strftime("%Y-%m-%d"),
         "RTE Discussion Summary": payload.discussion_summary,
         "Meeting Attendees": payload.meeting_attendees,
 
-        "Business Outcome": payload.business_outcome,
-        "Urgency Reason": payload.urgency_reason,
-
-        "Scope Clear": payload.scope_clear,
-        "Scope Clear Detail": payload.scope_clear_detail,
-        "Dependencies Known": payload.dependencies_known,
-        "Dependencies Known Detail": payload.dependencies_known_detail,
-        "Data Available": payload.data_available,
-        "Data Available Detail": payload.data_available_detail,
-        "API Ready": payload.api_ready,
-        "API Ready Detail": payload.api_ready_detail,
-        "NFR Defined": payload.nfr_defined,
-        "NFR Defined Detail": payload.nfr_defined_detail,
-
         "Demand Readiness": readiness["status"],
         "Readiness Score": readiness["score"],
-        "Readiness Gaps": readiness["gaps"],
-        "Readiness Detail Summary": readiness["detail_summary"],
+        "Readiness Detail Summary": (
+            f"Business Outcome: {payload.business_outcome or 'Not captured'}\n"
+            f"Urgency Reason: {payload.urgency_reason or 'Not captured'}\n\n"
+            f"{readiness['detail_summary']}\n\n"
+            f"Readiness Gaps: {readiness['gaps']}"
+        ),
 
         "Business Value": payload.business_value,
         "Time Criticality": payload.time_criticality,
@@ -692,13 +693,10 @@ def create_governance_register_row(source_row_id: int, payload: GovernancePayloa
         "Job Size": payload.job_size,
         "WSJF Score": wsjf,
 
-        "Capacity Impact": payload.capacity_impact,
-        "Target PI": payload.target_pi,
         "RTE Recommendation": recommendation,
         "Stakeholder Decision": payload.stakeholder_decision,
         "Next Action": payload.next_action,
         "Action Owner": payload.action_owner,
-        "Last RTE Update": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
     }
 
     missing_template_columns = []
@@ -714,7 +712,7 @@ def create_governance_register_row(source_row_id: int, payload: GovernancePayloa
         raise HTTPException(
             status_code=400,
             detail={
-                "message": "Governance Register template is missing required columns. Create/update the Governance Register sheet using the provided template.",
+                "message": "TRUE Lean 18 Governance Register template is missing required columns. The sheet must contain only the 18 lean columns listed in README.",
                 "missing_columns": missing_template_columns,
                 "governance_sheet_id": GOVERNANCE_SHEET_ID,
             },
