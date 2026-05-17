@@ -18,14 +18,14 @@ from pydantic import BaseModel
 load_dotenv()
 
 SMARTSHEET_TOKEN = os.getenv("SMARTSHEET_ACCESS_TOKEN", "").strip()
-SHEET_ID = os.getenv("SMARTSHEET_SHEET_ID", "6033225274419076").strip()
+SHEET_ID = os.getenv("SMARTSHEET_SHEET_ID", os.getenv("SHEET_ID", "6033225274419076")).strip()
 SHEET_LINK = os.getenv("SMARTSHEET_SHEET_LINK", "https://app.smartsheet.com/sheets/Xvm992gjVPMChMhPGRVx85Gr24jqH2g45pj5wCH1").strip()
 
 # Dual-sheet model:
 # SOURCE sheet = existing ASR / operational demand sheet.
 # GOVERNANCE sheet = clean ASOC Demand Governance Register template.
-GOVERNANCE_SHEET_ID = (os.getenv("SMARTSHEET_GOVERNANCE_SHEET_ID") or os.getenv("GOVERNANCE_SHEET_ID") or "").strip()
-GOVERNANCE_SHEET_LINK = (os.getenv("SMARTSHEET_GOVERNANCE_SHEET_LINK") or os.getenv("GOVERNANCE_SHEET_LINK") or "").strip()
+GOVERNANCE_SHEET_ID = os.getenv("SMARTSHEET_GOVERNANCE_SHEET_ID", os.getenv("GOVERNANCE_SHEET_ID", "")).strip()
+GOVERNANCE_SHEET_LINK = os.getenv("SMARTSHEET_GOVERNANCE_SHEET_LINK", "").strip()
 
 BASE_URL = "https://api.smartsheet.com/2.0"
 
@@ -36,7 +36,7 @@ app = FastAPI(title="ASOC Demand Governance Control Tower", version="3.0")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
-APP_BUILD_VERSION = "GOV-WORKBENCH-FLEX-ANALYSIS-AUTO-REPAIR-2026-05-17"
+APP_BUILD_VERSION = "GOV-WORKBENCH-DETAILS-COMMENTS-REGISTER-WRITEBACK-2026-05-17"
 
 @app.get("/api/version")
 def api_version():
@@ -140,7 +140,7 @@ def infer_key_columns(columns: List[str]) -> Dict[str, Optional[str]]:
         "due": pick(["due", "target", "deadline", "planned end", "end date"]),
         "portfolio": pick(["portfolio", "domain", "tribe", "area", "department"]),
         "initiative_status": pick(["initiative status", "initiative status (auto)", "initiative_state"]),
-        "analysis": pick(["analysis", "analyst", "assessment", "review notes"]),
+        "analysis": pick(["analysis", "analysis field", "demand analysis"]),
     }
 
 
@@ -576,101 +576,77 @@ def get_governance_sheet(include: str = "objectValue") -> Dict[str, Any]:
 
 def governance_template_columns() -> List[Dict[str, str]]:
     """
-    Enterprise ASOC Demand Governance Register template.
-    This aligns to the wider Governance Control Tower and prevents the
-    missing-column failure by allowing the app to repair/create columns.
+    Enterprise Governance Register template.
+    The source ASR sheet is read-only for governance discussions.
+    All governance updates are written into this Governance Register sheet.
+    Missing columns are auto-created before submit.
     """
+    text = "TEXT_NUMBER"
+    date = "DATE"
+    pick = "PICKLIST"
     return [
-        {"title": "Governance Record ID", "type": "TEXT_NUMBER"},
-        {"title": "Source Sheet ID", "type": "TEXT_NUMBER"},
-        {"title": "Source Row Number", "type": "TEXT_NUMBER"},
-        {"title": "Source Row ID", "type": "TEXT_NUMBER"},
-        {"title": "Source Sheet Link", "type": "TEXT_NUMBER"},
-        {"title": "ASR Numbers Auto", "type": "TEXT_NUMBER"},
-        {"title": "ASR Number", "type": "TEXT_NUMBER"},
-        {"title": "Demand", "type": "TEXT_NUMBER"},
-        {"title": "Demand Title", "type": "TEXT_NUMBER"},
-        {"title": "Initiative Status", "type": "TEXT_NUMBER"},
-        {"title": "Analysis", "type": "TEXT_NUMBER"},
-        {"title": "Portfolio / Domain", "type": "TEXT_NUMBER"},
-        {"title": "Requestor", "type": "TEXT_NUMBER"},
-        {"title": "Owner / Assignee", "type": "TEXT_NUMBER"},
-        {"title": "Priority", "type": "TEXT_NUMBER"},
-        {"title": "Created Date", "type": "TEXT_NUMBER"},
-        {"title": "Current Health", "type": "TEXT_NUMBER"},
-        {"title": "Business Outcome", "type": "TEXT_NUMBER"},
-        {"title": "Urgency Reason", "type": "TEXT_NUMBER"},
-        {"title": "Scope Clear", "type": "CHECKBOX"},
-        {"title": "Scope Clear Detail", "type": "TEXT_NUMBER"},
-        {"title": "Dependencies Known", "type": "CHECKBOX"},
-        {"title": "Dependencies Known Detail", "type": "TEXT_NUMBER"},
-        {"title": "Data Available", "type": "CHECKBOX"},
-        {"title": "Data Available Detail", "type": "TEXT_NUMBER"},
-        {"title": "API Ready", "type": "CHECKBOX"},
-        {"title": "API Ready Detail", "type": "TEXT_NUMBER"},
-        {"title": "NFR Defined", "type": "CHECKBOX"},
-        {"title": "NFR Defined Detail", "type": "TEXT_NUMBER"},
-        {"title": "Readiness Gaps", "type": "TEXT_NUMBER"},
-        {"title": "Capacity Impact", "type": "PICKLIST"},
-        {"title": "Target PI", "type": "TEXT_NUMBER"},
-        {"title": "RTE Discussion Date", "type": "DATE"},
-        {"title": "RTE Discussion Summary", "type": "TEXT_NUMBER"},
-        {"title": "Meeting Attendees", "type": "TEXT_NUMBER"},
-        {"title": "Demand Readiness", "type": "PICKLIST"},
-        {"title": "Readiness Score", "type": "TEXT_NUMBER"},
-        {"title": "Readiness Detail Summary", "type": "TEXT_NUMBER"},
-        {"title": "Business Value", "type": "TEXT_NUMBER"},
-        {"title": "Time Criticality", "type": "TEXT_NUMBER"},
-        {"title": "Risk Reduction", "type": "TEXT_NUMBER"},
-        {"title": "Job Size", "type": "TEXT_NUMBER"},
-        {"title": "WSJF Score", "type": "TEXT_NUMBER"},
-        {"title": "RTE Recommendation", "type": "TEXT_NUMBER"},
-        {"title": "Stakeholder Decision", "type": "PICKLIST"},
-        {"title": "Governance Decision", "type": "TEXT_NUMBER"},
-        {"title": "Action Required", "type": "TEXT_NUMBER"},
-        {"title": "Next Action", "type": "TEXT_NUMBER"},
-        {"title": "Action Owner", "type": "TEXT_NUMBER"},
-        {"title": "Action Due Date", "type": "DATE"},
-        {"title": "Last RTE Update", "type": "TEXT_NUMBER"},
+        {"title": "Governance Record ID", "type": text},
+        {"title": "Source Sheet ID", "type": text},
+        {"title": "Source Row Number", "type": text},
+        {"title": "Source Row ID", "type": text},
+        {"title": "Source Sheet Link", "type": text},
+        {"title": "ASR Numbers Auto", "type": text},
+        {"title": "ASR Number", "type": text},
+        {"title": "Demand", "type": text},
+        {"title": "Demand Title", "type": text},
+        {"title": "Initiative Status", "type": text},
+        {"title": "Analysis", "type": text},
+        {"title": "Portfolio / Domain", "type": text},
+        {"title": "Requestor", "type": text},
+        {"title": "Owner / Assignee", "type": text},
+        {"title": "Priority", "type": text},
+        {"title": "Created Date", "type": date},
+        {"title": "Current Health", "type": text},
+        {"title": "Business Outcome", "type": text},
+        {"title": "Urgency Reason", "type": text},
+        {"title": "Scope Clear", "type": pick},
+        {"title": "Scope Clear Detail", "type": text},
+        {"title": "Dependencies Known", "type": pick},
+        {"title": "Dependencies Known Detail", "type": text},
+        {"title": "Data Available", "type": pick},
+        {"title": "Data Available Detail", "type": text},
+        {"title": "API Ready", "type": pick},
+        {"title": "API Ready Detail", "type": text},
+        {"title": "NFR Defined", "type": pick},
+        {"title": "NFR Defined Detail", "type": text},
+        {"title": "Readiness Gaps", "type": text},
+        {"title": "Capacity Impact", "type": pick},
+        {"title": "Target PI", "type": text},
+        {"title": "Last RTE Update", "type": text},
+        {"title": "RTE Discussion Date", "type": date},
+        {"title": "RTE Discussion Summary", "type": text},
+        {"title": "Meeting Attendees", "type": text},
+        {"title": "Demand Readiness", "type": pick},
+        {"title": "Readiness Score", "type": text},
+        {"title": "Readiness Detail Summary", "type": text},
+        {"title": "Business Value", "type": text},
+        {"title": "Time Criticality", "type": text},
+        {"title": "Risk Reduction", "type": text},
+        {"title": "Job Size", "type": text},
+        {"title": "WSJF Score", "type": text},
+        {"title": "RTE Recommendation", "type": text},
+        {"title": "Stakeholder Decision", "type": pick},
+        {"title": "Governance Discussion Notes", "type": text},
+        {"title": "Governance Decision", "type": text},
+        {"title": "Action Required", "type": text},
+        {"title": "Next Action", "type": text},
+        {"title": "Action Owner", "type": text},
+        {"title": "Action Due Date", "type": date},
     ]
-
-
-def ensure_governance_register_template(auto_create: bool = True) -> Dict[str, Any]:
-    """Validate and optionally repair the Governance Register columns."""
-    sheet = get_governance_sheet(include="")
-    _, by_title = column_maps(sheet)
-    expected = governance_template_columns()
-    missing = [c for c in expected if c["title"].strip().lower() not in by_title]
-    added = []
-    if missing and auto_create:
-        new_columns = []
-        current_count = len(sheet.get("columns", []))
-        for idx, col in enumerate(missing):
-            body = {"title": col["title"], "type": col.get("type", "TEXT_NUMBER"), "index": current_count + idx}
-            opts = governance_picklist_options(col["title"])
-            if opts:
-                body["options"] = opts
-            new_columns.append(body)
-        if new_columns:
-            smartsheet("POST", f"/sheets/{GOVERNANCE_SHEET_ID}/columns", json=new_columns)
-            added = [c["title"] for c in missing]
-        sheet = get_governance_sheet(include="")
-        _, by_title = column_maps(sheet)
-        missing = [c for c in expected if c["title"].strip().lower() not in by_title]
-    return {
-        "governance_sheet_name": sheet.get("name"),
-        "governance_sheet_id": GOVERNANCE_SHEET_ID,
-        "governance_sheet_link": sheet.get("permalink") or GOVERNANCE_SHEET_LINK,
-        "expected_columns": expected,
-        "existing_columns": [c.get("title") for c in sheet.get("columns", [])],
-        "missing_columns": missing,
-        "missing_columns_added": added,
-        "is_ready": len(missing) == 0,
-    }
 
 def governance_picklist_options(title: str) -> Optional[List[str]]:
     return {
         "Demand Readiness": ["Ready", "Not Ready"],
+        "Scope Clear": ["Yes", "No"],
+        "Dependencies Known": ["Yes", "No"],
+        "Data Available": ["Yes", "No"],
+        "API Ready": ["Yes", "No"],
+        "NFR Defined": ["Yes", "No"],
         "Capacity Impact": ["Low", "Medium", "High"],
         "Stakeholder Decision": [
             "Commit",
@@ -686,13 +662,66 @@ def governance_picklist_options(title: str) -> Optional[List[str]]:
 
 
 def governance_template_status() -> Dict[str, Any]:
-    return ensure_governance_register_template(auto_create=False)
+    sheet = get_governance_sheet(include="")
+    _, by_title = column_maps(sheet)
+    expected = governance_template_columns()
+    missing = [c for c in expected if c["title"].strip().lower() not in by_title]
+    existing = [c["title"] for c in expected if c["title"].strip().lower() in by_title]
+    return {
+        "governance_sheet_name": sheet.get("name"),
+        "governance_sheet_id": GOVERNANCE_SHEET_ID,
+        "governance_sheet_link": sheet.get("permalink") or GOVERNANCE_SHEET_LINK,
+        "expected_columns": expected,
+        "existing_columns": existing,
+        "missing_columns": missing,
+        "is_ready": len(missing) == 0,
+    }
 
 
-@app.post("/api/governance/template-repair")
-def api_governance_template_repair():
-    return ensure_governance_register_template(auto_create=True)
 
+def ensure_governance_register_template() -> Dict[str, Any]:
+    """Auto-add missing Governance Register columns so submit does not fail."""
+    sheet = get_governance_sheet(include="")
+    _, by_title = column_maps(sheet)
+    missing = [c for c in governance_template_columns() if c["title"].strip().lower() not in by_title]
+    if not missing:
+        return {"status": "ready", "added_columns": [], "governance_sheet_id": GOVERNANCE_SHEET_ID}
+
+    current_count = len(sheet.get("columns", []))
+    new_columns = []
+    for idx, col in enumerate(missing):
+        column_payload = {
+            "title": col["title"],
+            "type": col.get("type") or "TEXT_NUMBER",
+            "index": current_count + idx,
+        }
+        options = governance_picklist_options(col["title"])
+        if options:
+            column_payload["options"] = options
+        new_columns.append(column_payload)
+
+    result = smartsheet("POST", f"/sheets/{GOVERNANCE_SHEET_ID}/columns", json=new_columns)
+    return {"status": "repaired", "added_columns": [c["title"] for c in missing], "result": result, "governance_sheet_id": GOVERNANCE_SHEET_ID}
+
+
+def latest_governance_for_source_row(source_row_id: int) -> Optional[Dict[str, Any]]:
+    """Return the latest Governance Register row for a source demand row, if present."""
+    if not GOVERNANCE_SHEET_ID:
+        return None
+    try:
+        gov_sheet = get_governance_sheet(include="objectValue")
+        by_id, _ = column_maps(gov_sheet)
+        candidates = []
+        for row in gov_sheet.get("rows", []):
+            rec = row_to_dict(row, by_id)
+            if str(rec.get("Source Row ID", "")).strip() == str(source_row_id) or str(rec.get("Source Row Number", "")).strip() == str(source_row_id):
+                rec["_governance_row_id"] = row.get("id")
+                rec["_governance_row_number"] = row.get("rowNumber")
+                candidates.append(rec)
+        candidates.sort(key=lambda r: str(r.get("RTE Discussion Date") or r.get("Last RTE Update") or r.get("_modified_at") or ""), reverse=True)
+        return candidates[0] if candidates else None
+    except Exception:
+        return None
 
 
 def create_governance_register_row(source_row_id: int, payload: GovernancePayload) -> Dict[str, Any]:
@@ -715,9 +744,7 @@ def create_governance_register_row(source_row_id: int, payload: GovernancePayloa
 
     source_record = row_to_dict(source_row, source_by_id)
 
-    template_status = ensure_governance_register_template(auto_create=True)
-    if not template_status.get("is_ready"):
-        raise HTTPException(status_code=400, detail={"message": "Governance Register template could not be repaired automatically.", "missing_columns": template_status.get("missing_columns", []), "governance_sheet_id": GOVERNANCE_SHEET_ID})
+    ensure_result = ensure_governance_register_template()
     gov_sheet = get_governance_sheet(include="")
     _, gov_by_title = column_maps(gov_sheet)
 
@@ -733,21 +760,9 @@ def create_governance_register_row(source_row_id: int, payload: GovernancePayloa
     demand_title = source_value("demand")
     governance_record_id = f"{asr_number or source_row_id}-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
 
-    initiative_status = source_value("initiative_status") or source_value("status")
-    analysis = source_value("analysis")
-    portfolio = source_value("portfolio")
-    requestor = source_value("requestor")
-    owner = source_value("assignee")
-    priority = source_value("priority")
-    created_date = source_value("created") or str(source_record.get("_created_at", "") or "")
-    current_health = "Closed" if is_closed(initiative_status) else "Open"
-    last_update = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    readiness_detail_summary = (
-        f"Business Outcome: {payload.business_outcome or 'Not captured'}\n"
-        f"Urgency Reason: {payload.urgency_reason or 'Not captured'}\n\n"
-        f"{readiness['detail_summary']}\n\n"
-        f"Readiness Gaps: {readiness['gaps']}"
-    )
+    def fmt_date(v: Any) -> Any:
+        dt = parse_date(v)
+        return dt.strftime("%Y-%m-%d") if dt is not None else ""
 
     values = {
         "Governance Record ID": governance_record_id,
@@ -759,35 +774,43 @@ def create_governance_register_row(source_row_id: int, payload: GovernancePayloa
         "ASR Number": asr_number,
         "Demand": demand_title,
         "Demand Title": demand_title,
-        "Initiative Status": initiative_status,
-        "Analysis": analysis,
-        "Portfolio / Domain": portfolio,
-        "Requestor": requestor,
-        "Owner / Assignee": owner,
-        "Priority": priority,
-        "Created Date": created_date,
-        "Current Health": current_health,
+        "Initiative Status": source_value("initiative_status") or source_value("status"),
+        "Analysis": source_value("analysis"),
+        "Portfolio / Domain": source_value("portfolio"),
+        "Requestor": source_value("requestor"),
+        "Owner / Assignee": source_value("assignee"),
+        "Priority": source_value("priority"),
+        "Created Date": fmt_date(source_record.get(keys.get("created"), "") if keys.get("created") else source_row.get("createdAt")),
+        "Current Health": source_record.get("_health", ""),
+
         "Business Outcome": payload.business_outcome,
         "Urgency Reason": payload.urgency_reason,
-        "Scope Clear": bool(payload.scope_clear),
+        "Scope Clear": "Yes" if payload.scope_clear else "No",
         "Scope Clear Detail": payload.scope_clear_detail,
-        "Dependencies Known": bool(payload.dependencies_known),
+        "Dependencies Known": "Yes" if payload.dependencies_known else "No",
         "Dependencies Known Detail": payload.dependencies_known_detail,
-        "Data Available": bool(payload.data_available),
+        "Data Available": "Yes" if payload.data_available else "No",
         "Data Available Detail": payload.data_available_detail,
-        "API Ready": bool(payload.api_ready),
+        "API Ready": "Yes" if payload.api_ready else "No",
         "API Ready Detail": payload.api_ready_detail,
-        "NFR Defined": bool(payload.nfr_defined),
+        "NFR Defined": "Yes" if payload.nfr_defined else "No",
         "NFR Defined Detail": payload.nfr_defined_detail,
         "Readiness Gaps": readiness["gaps"],
         "Capacity Impact": payload.capacity_impact,
         "Target PI": payload.target_pi,
+        "Last RTE Update": datetime.now().strftime("%Y-%m-%d %H:%M"),
+
         "RTE Discussion Date": datetime.now().strftime("%Y-%m-%d"),
         "RTE Discussion Summary": payload.discussion_summary,
         "Meeting Attendees": payload.meeting_attendees,
         "Demand Readiness": readiness["status"],
         "Readiness Score": readiness["score"],
-        "Readiness Detail Summary": readiness_detail_summary,
+        "Readiness Detail Summary": (
+            f"Business Outcome: {payload.business_outcome or 'Not captured'}\n"
+            f"Urgency Reason: {payload.urgency_reason or 'Not captured'}\n\n"
+            f"{readiness['detail_summary']}\n\n"
+            f"Readiness Gaps: {readiness['gaps']}"
+        ),
         "Business Value": payload.business_value,
         "Time Criticality": payload.time_criticality,
         "Risk Reduction": payload.risk_reduction,
@@ -795,11 +818,11 @@ def create_governance_register_row(source_row_id: int, payload: GovernancePayloa
         "WSJF Score": wsjf,
         "RTE Recommendation": recommendation,
         "Stakeholder Decision": payload.stakeholder_decision,
+        "Governance Discussion Notes": payload.discussion_summary,
         "Governance Decision": payload.stakeholder_decision,
         "Action Required": payload.next_action,
         "Next Action": payload.next_action,
         "Action Owner": payload.action_owner,
-        "Last RTE Update": last_update,
     }
 
     missing_template_columns = []
@@ -815,7 +838,7 @@ def create_governance_register_row(source_row_id: int, payload: GovernancePayloa
         raise HTTPException(
             status_code=400,
             detail={
-                "message": "Governance Register template is missing required columns and auto-repair did not complete.",
+                "message": "Governance Register template is missing required columns even after auto-repair. Check Smartsheet permissions to add columns.",
                 "missing_columns": missing_template_columns,
                 "governance_sheet_id": GOVERNANCE_SHEET_ID,
             },
@@ -823,24 +846,9 @@ def create_governance_register_row(source_row_id: int, payload: GovernancePayloa
 
     result = smartsheet("POST", f"/sheets/{GOVERNANCE_SHEET_ID}/rows", json=[{"toTop": True, "cells": cells}])
 
-    comment_text = (
-        f"Submitted to ASOC Demand Governance Register\\n"
-        f"Governance Record ID: {governance_record_id}\\n"
-        f"Readiness: {readiness['status']} ({readiness['score']}%)\\n"
-        f"WSJF Score: {wsjf}\\n"
-        f"RTE Recommendation: {recommendation}\\n"
-        f"Stakeholder Decision: {payload.stakeholder_decision}\\n"
-        f"Next Action: {payload.next_action}\\n"
-        f"Action Owner: {payload.action_owner}\\n"
-        f"Target PI: {payload.target_pi}"
-    )
-
+    # Governance updates intentionally write to the Governance Register only.
+    # The source demand sheet remains read-only in the governance workflow.
     source_comment_added = False
-    try:
-        smartsheet("POST", f"/sheets/{SHEET_ID}/rows/{source_row_id}/discussions", json={"comment": {"text": comment_text}})
-        source_comment_added = True
-    except Exception:
-        source_comment_added = False
 
     return {
         "status": "created",
@@ -854,6 +862,7 @@ def create_governance_register_row(source_row_id: int, payload: GovernancePayloa
         "governance_sheet_link": gov_sheet.get("permalink") or GOVERNANCE_SHEET_LINK,
         "smartsheet": result,
         "source_comment_added": source_comment_added,
+        "template_check": ensure_result,
     }
 
 
@@ -1160,6 +1169,26 @@ def api_governance_template_status():
     return governance_template_status()
 
 
+
+@app.post("/api/governance/template-repair")
+def api_governance_template_repair():
+    return ensure_governance_register_template()
+
+
+@app.get("/api/governance/demand/{row_id}/details")
+def api_governance_demand_details(row_id: int):
+    detail = get_row_detail(row_id)
+    comments = get_row_comments(row_id)
+    latest_gov = latest_governance_for_source_row(row_id)
+    return {
+        "row": detail,
+        "comments": comments.get("comments", []),
+        "comment_count": comments.get("count", 0),
+        "latest_governance": latest_gov,
+        "write_back_rule": "Governance updates are written to the Governance Register sheet only.",
+        "governance_sheet_id": GOVERNANCE_SHEET_ID,
+    }
+
 @app.get("/api/governance/recommended-columns")
 def api_governance_recommended_columns():
     return {"columns": governance_template_columns()}
@@ -1177,7 +1206,7 @@ def export_excel():
         pd.DataFrame([dash["metrics"]]).to_excel(writer, sheet_name="Executive Summary", index=False)
         for name, data in dash["charts"].items():
             pd.DataFrame(data).to_excel(writer, sheet_name=name[:31], index=False)
-        pd.DataFrame(api_governance_recommended_columns()["columns"]).to_excel(writer, sheet_name="Governance Columns", index=False)
+        pd.DataFrame(api_governance_recommended_columns()["columns"], columns=["Recommended Governance Columns"]).to_excel(writer, sheet_name="Governance Columns", index=False)
     output.seek(0)
     filename = f"asoc_demand_governance_export_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
     return StreamingResponse(output, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": f"attachment; filename={filename}"})
