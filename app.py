@@ -29,6 +29,11 @@ GOVERNANCE_SHEET_LINK = os.getenv("SMARTSHEET_GOVERNANCE_SHEET_LINK", "").strip(
 
 BASE_URL = "https://api.smartsheet.com/2.0"
 
+# Short in-memory cache for source Smartsheet reads.
+# Render starts a fresh process on deploy, so this cache is safe and temporary.
+SHEET_CACHE_TTL_SECONDS = int(os.getenv("SHEET_CACHE_TTL_SECONDS", "300"))
+_SHEET_CACHE = {"ts": 0.0, "include": None, "sheet": None}
+
 os.makedirs("static", exist_ok=True)
 os.makedirs("templates", exist_ok=True)
 
