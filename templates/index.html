@@ -165,6 +165,16 @@ table{min-width:max-content}td{max-width:520px;word-break:break-word}.wide-text{
               <div id="govCommentsStatus" class="muted" style="margin-bottom:8px">Select a demand to load comments.</div><div id="govComments" class="gov-detail-box gov-comments"><p class="muted">Select a demand to load row-level comments.</p></div>
             </div>
           </div>
+          <div class="comments-panel" id="govCriticalCommentsPanel" style="margin-top:14px; position:relative; top:auto; height:auto; border:2px solid #bfdbfe; background:#eff6ff;">
+            <h3 style="margin:0 0 6px">SmartSheet Comments - Source Demand Row</h3>
+            <p class="muted" style="margin:0 0 8px">These are the same row-level SmartSheet discussions/comments used in the Interrogate view. They are read from the source demand sheet and are critical context for governance discussions.</p>
+            <div id="govCommentsStatus2" class="muted" style="margin-bottom:8px">Select a demand to load comments.</div>
+            <div id="govComments2" class="comment-list" style="max-height:520px"><p class="muted">Select a demand to load row-level comments.</p></div>
+            <div class="actions" style="margin-top:8px">
+              <button class="btn soft mini" onclick="reloadGovernanceComments()">Reload SmartSheet Comments</button>
+              <button class="btn ghost mini" onclick="openGovernanceSourceDemand()">Open Full Demand View</button>
+            </div>
+          </div>
           <div style="margin-top:12px">
             <h4 style="margin:0 0 8px">Latest Governance Register Entry</h4>
             <div id="govLatestRegister" class="gov-detail-box"><p class="muted">No governance register entry loaded yet.</p></div>
@@ -248,7 +258,7 @@ table{min-width:max-content}td{max-width:520px;word-break:break-word}.wide-text{
 <div id="toast" class="toast"></div>
 
 <script>
-let SHEET=null, DASH=null, FILTERS=null, charts={}, ruleSeq=0, CURRENT_DASH_SOURCE='full', CURRENT_DETAIL=null, DETAIL_DIRTY={}, CURRENT_GOV_ROW=null;
+let SHEET=null, DASH=null, FILTERS=null, charts={}, ruleSeq=0, CURRENT_DASH_SOURCE='full', CURRENT_DETAIL=null, DETAIL_DIRTY={}, CURRENT_GOV_ROW=null, CURRENT_GOV_COMMENTS=[];
 const OPERATORS=[['contains','contains'],['equals','equals'],['not_equals','not equals'],['not_contains','does not contain'],['starts_with','starts with'],['ends_with','ends with'],['blank','is blank'],['not_blank','is not blank'],['greater_than','greater than'],['less_than','less than'],['greater_or_equal','greater or equal'],['less_or_equal','less or equal'],['date_after','date after'],['date_before','date before'],['date_on','date on']];
 const titles={dashboard:['Executive Dashboard','Portfolio health, workload, aging, risk and demand throughput view.'],interrogate:['Interrogate','Build column-specific filters and drive dashboard insights from the result set.'],governance:['Governance Control Tower','Live RTE stakeholder discussion, readiness, WSJF and Governance Register submission.'],manager:['Manager View','Capacity, quality and readiness cockpit for daily demand management.'],capacity:['Capacity','Team workload, weighted load, overload and WIP risk view.'],risk:['Risk','Prioritised risk panel based on readiness, aging and capacity risk.'],register:['Demand Register','Select a demand, inspect all details, update fields and write back to Smartsheet.'],add:['Add Demand','Create a new demand directly in Smartsheet.']};
 function show(id,btn){document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));document.getElementById(id).classList.add('active');document.querySelectorAll('.nav button').forEach(b=>b.classList.remove('active'));if(btn&&btn.tagName==='BUTTON')btn.classList.add('active');document.getElementById('pageTitle').textContent=titles[id][0];document.getElementById('pageSub').textContent=titles[id][1];if(id!=='dashboard') ensureAppDataLoaded();}
@@ -375,8 +385,44 @@ function renderGovDetailTable(record){
   return rows?`<table><tbody>${rows}</tbody></table>`:'<p class="muted">No details available.</p>';
 }
 function renderGovComments(comments){
-  if(!comments||!comments.length)return '<p class="muted">No SmartSheet comments found for this demand.</p>';
-  return comments.map(c=>`<div class="comment-item"><div class="comment-meta"><b>${escapeHtml(c.created_by||'SmartSheet User')}</b> - ${escapeHtml(c.created_at||'')}</div><div class="comment-text">${escapeHtml(c.text||'')}</div></div>`).join('');
+  if(!comments||!comments.length)return '<p class="muted">No SmartSheet comments found for this demand row.</p>';
+  return comments.map(c=>{
+    const by = c.created_by || c.createdBy || c.author || 'SmartSheet User';
+    const at = c.created_at || c.createdAt || c.modifiedAt || '';
+    const txt = c.text || c.comment || c.body || '';
+    return `<div class="comment-item"><div class="comment-meta"><b>${escapeHtml(by)}</b> - ${escapeHtml(at)}</div><div class="comment-text">${escapeHtml(txt)}</div></div>`;
+  }).join('');
+}
+async function fetchGovernanceComments(rowId){
+  const status1=document.getElementById('govCommentsStatus');
+  const status2=document.getElementById('govCommentsStatus2');
+  const setStatus=(msg)=>{ if(status1)status1.textContent=msg; if(status2)status2.textContent=msg; };
+  setStatus('Loading SmartSheet comments from source demand row...');
+  try{
+    const res=await fetch(`/api/rows/${rowId}/comments`).then(ok);
+    CURRENT_GOV_COMMENTS=res.comments||[];
+    const msg=res.count ? `${res.count} SmartSheet comment(s) loaded from the source demand row.` : 'No SmartSheet comments found for this source demand row.';
+    setStatus(msg);
+    const html=renderGovComments(CURRENT_GOV_COMMENTS);
+    const box1=document.getElementById('govComments'); if(box1)box1.innerHTML=html;
+    const box2=document.getElementById('govComments2'); if(box2)box2.innerHTML=html;
+    return CURRENT_GOV_COMMENTS;
+  }catch(e){
+    const msg='Could not load SmartSheet comments: '+e.message;
+    setStatus(msg);
+    const err=`<p class="muted">${escapeHtml(msg)}</p>`;
+    const box1=document.getElementById('govComments'); if(box1)box1.innerHTML=err;
+    const box2=document.getElementById('govComments2'); if(box2)box2.innerHTML=err;
+    return [];
+  }
+}
+async function reloadGovernanceComments(){
+  if(!CURRENT_GOV_ROW){toast('Select a demand first.');return;}
+  await fetchGovernanceComments(CURRENT_GOV_ROW);
+}
+function openGovernanceSourceDemand(){
+  if(!CURRENT_GOV_ROW){toast('Select a demand first.');return;}
+  openDemandDetail(CURRENT_GOV_ROW);
 }
 async function loadGovernanceDemand(rowId){
   setLoad(true);
@@ -394,10 +440,9 @@ async function loadGovernanceDemand(rowId){
     document.getElementById('govRow').textContent=ref;
     document.getElementById('govDemandContext').innerHTML=`<b>${escapeHtml(ref)}</b><br>${escapeHtml(title)}<br><br><span class="pill">${escapeHtml(status)}</span><br><br><b>Analysis:</b><br>${escapeHtml(analysis)}<br><br><b>Owner:</b> ${escapeHtml(assignee)}<br><b>Requestor:</b> ${escapeHtml(requestor)}<br><b>Source Row ID:</b> ${d.row_id}<br><br><span class="pill">Updates save to Governance Register only</span>`;
     document.getElementById('govAllDetails').innerHTML=renderGovDetailTable(d.record||{});
-    const govCommentCount=(bundle.comments||[]).length;
-    const govCommentsStatus=document.getElementById('govCommentsStatus');
-    if(govCommentsStatus) govCommentsStatus.textContent=govCommentCount ? `${govCommentCount} SmartSheet comment(s) loaded from the source demand row.` : 'No SmartSheet comments found for this source demand row.';
-    document.getElementById('govComments').innerHTML=renderGovComments(bundle.comments||[]);
+    // Always load SmartSheet row-level comments using the same API path as the Interrogate / Demand Detail view.
+    // This avoids losing comments if the governance details bundle is stale or incomplete.
+    await fetchGovernanceComments(rowId);
     document.getElementById('govLatestRegister').innerHTML=bundle.latest_governance?renderGovDetailTable(bundle.latest_governance):'<p class="muted">No previous Governance Register entry found for this demand.</p>';
 
     const rec=(bundle.latest_governance||d.record||{});

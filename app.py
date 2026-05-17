@@ -1567,10 +1567,13 @@ def api_governance_demand_details(row_id: int):
     detail = get_row_detail(row_id)
     comments = get_row_comments(row_id)
     latest_gov = latest_governance_for_source_row(row_id)
+    smartsheet_comments = comments.get("comments", [])
     return {
         "row": detail,
-        "comments": comments.get("comments", []),
+        "comments": smartsheet_comments,
+        "smartsheet_comments": smartsheet_comments,
         "comment_count": comments.get("count", 0),
+        "comments_source": "source_demand_sheet_row_discussions",
         "latest_governance": latest_gov,
         "write_back_rule": "Governance updates are written to the Governance Register sheet only.",
         "governance_sheet_id": GOVERNANCE_SHEET_ID,
