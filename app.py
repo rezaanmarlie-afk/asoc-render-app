@@ -1299,6 +1299,26 @@ def api_dashboard():
     return dash
 
 
+def resolve_dashboard_filter_payload(payload: FilterPayload, keys: Dict[str, Optional[str]], df: pd.DataFrame) -> FilterPayload:
+    """Resolve lightweight UI aliases such as __key__:analysis to real columns.
+
+    This lets the Executive Dashboard open without first loading the full sheet
+    in the browser. The backend knows the actual Smartsheet columns after it
+    builds the combined demand + governance dataframe.
+    """
+    resolved_rules = []
+    for rule in payload.rules:
+        col = rule.column
+        if isinstance(col, str) and col.startswith("__key__:"):
+            key = col.split(":", 1)[1]
+            col = keys.get(key) or col
+        # Keep governance/system columns unchanged. Drop only aliases that still
+        # do not resolve to an actual dataframe column.
+        if col in df.columns:
+            resolved_rules.append(FilterRule(column=col, operator=rule.operator, value=rule.value))
+    return FilterPayload(rules=resolved_rules, logic=payload.logic, limit=payload.limit)
+
+
 @app.post("/api/dashboard/filter")
 def api_dashboard_filter(payload: FilterPayload):
     """Build the Executive Governance Dashboard from selected criteria.
@@ -1310,6 +1330,7 @@ def api_dashboard_filter(payload: FilterPayload):
     """
     sheet, df, keys = build_governance_dashboard_dataframe()
     enriched_all = enrich_quality(df, keys)
+    payload = resolve_dashboard_filter_payload(payload, keys, enriched_all)
     filtered = apply_filter_rules(enriched_all, payload) if payload.rules else enriched_all
     enriched = enrich_quality(filtered, keys)
     dashboard = dashboard_from_df(sheet, enriched, keys)
