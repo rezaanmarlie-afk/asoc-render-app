@@ -161,7 +161,7 @@ table{min-width:max-content}td{max-width:520px;word-break:break-word}.wide-text{
               <div id="govAllDetails" class="gov-detail-box"><p class="muted">Select a demand to load all fields.</p></div>
             </div>
             <div>
-              <h4 style="margin:0 0 8px">SmartSheet Comments</h4>
+              <h4 style="margin:0 0 8px">SmartSheet Comments</h4><p class="muted" style="margin:0 0 8px">Loaded directly from the selected demand row discussions.</p>
               <div id="govComments" class="gov-detail-box gov-comments"><p class="muted">Select a demand to load row-level comments.</p></div>
             </div>
           </div>
@@ -259,7 +259,13 @@ function renderDashboard(){if(!DASH){renderDashboardNotLoaded();return;}document
 function renderDashboardNotLoaded(){document.getElementById('dashboardEmpty').style.display='block';document.getElementById('dashboardContent').style.display='none';document.getElementById('dashboardCriteriaStatus').textContent='Select criteria and click Load Dashboard.';}
 function draw(id,type,items){let ctx=document.getElementById(id); if(!ctx) return; if(charts[id])charts[id].destroy();charts[id]=new Chart(ctx,{type:type,data:{labels:(items||[]).map(x=>x.name),datasets:[{label:'Count',data:(items||[]).map(x=>x.value)}]},options:{responsive:true,plugins:{legend:{display:type==='doughnut'?true:false}},scales:type==='bar'?{y:{beginAtZero:true}}:{}}});}
 function renderRisk(){const div=document.getElementById('riskList');const items=DASH.risk_items||[];if(!items.length){div.innerHTML='<p class="muted">No open risk items found.</p>';return}div.innerHTML='<table><thead><tr><th>Health</th><th>Age</th><th>Key details</th><th>Action</th></tr></thead><tbody>'+items.map(x=>`<tr><td><span class="pill health-${x.health}">${x.health}</span></td><td>${x.age_days||''}</td><td>${Object.entries(x.fields).map(([k,v])=>`<b>${escapeHtml(k)}:</b> ${escapeHtml(v||'')}`).join('<br>')}</td><td><button class="btn secondary mini" onclick="openGovernance(${x.row_id})">Govern</button></td></tr>`).join('')+'</tbody></table>';}
-function renderGovernanceActions(){const div=document.getElementById('govActionsList');if(!div)return;const items=(DASH.governance&&DASH.governance.actions)||[];if(!items.length){div.innerHTML='<p class="muted">No governance actions found for the selected criteria.</p>';return;}div.innerHTML='<table><thead><tr><th>ASR</th><th>Target PI</th><th>Decision</th><th>Action</th><th>Owner</th><th>Due</th><th>Open</th></tr></thead><tbody>'+items.map(x=>`<tr><td>${escapeHtml(x.asr||'')}</td><td>${escapeHtml(x.target_pi||'')}</td><td>${escapeHtml(x.decision||'')}</td><td>${escapeHtml(x.action_required||'')}</td><td>${escapeHtml(x.action_owner||'')}</td><td>${escapeHtml(x.action_due||'')}</td><td>${x.overdue?'<span class="pill health-Overdue">Overdue</span>':'<span class="pill">Open</span>'}</td></tr><tr><td colspan="7" class="muted">${escapeHtml(x.demand||'')}</td></tr>`).join('')+'</tbody></table>';}
+function renderGovernanceActions(){
+  const div=document.getElementById('govActionsList');
+  if(!div)return;
+  const items=(DASH.governance&&DASH.governance.actions)||[];
+  if(!items.length){div.innerHTML='<p class="muted">No governance actions found for the selected criteria.</p>';return;}
+  div.innerHTML='<table><thead><tr><th>ASR</th><th>Target PI</th><th>Decision</th><th>Action</th><th>Owner</th><th>Due</th><th>Open</th><th>View</th></tr></thead><tbody>'+items.map(x=>`<tr><td>${escapeHtml(x.asr||'')}</td><td>${escapeHtml(x.target_pi||'')}</td><td>${escapeHtml(x.decision||'')}</td><td>${escapeHtml(x.action_required||'')}</td><td>${escapeHtml(x.action_owner||'')}</td><td>${escapeHtml(x.action_due||'')}</td><td>${x.overdue?'<span class="pill health-Overdue">Overdue</span>':'<span class="pill">Open</span>'}</td><td>${x.row_id?`<button class="btn secondary mini" onclick="openGovernance(${x.row_id})">Discuss / Comments</button>`:''}</td></tr><tr><td colspan="8" class="muted">${escapeHtml(x.demand||'')}</td></tr>`).join('')+'</tbody></table>';
+}
 function updateBanner(){const b=document.getElementById('filterBanner');if(CURRENT_DASH_SOURCE==='filtered'||CURRENT_DASH_SOURCE==='criteria'){b.classList.add('on');b.innerHTML='Dashboard is showing a criteria-filtered demand set. Click <b>Reset Dashboard</b> to clear the view, or <b>Load Full Dashboard</b> if you really need everything.';}else{b.classList.remove('on');b.innerHTML='';}}
 function clearDashboardFilter(){DASH=null;CURRENT_DASH_SOURCE='not_loaded';renderDashboardNotLoaded();updateBanner();}
 function renderSuggestions(items){document.getElementById('suggestions').innerHTML=items.map(s=>`<button class="chip" onclick="quickQuery('${esc(s)}')">${escapeHtml(s)}</button>`).join('')}
