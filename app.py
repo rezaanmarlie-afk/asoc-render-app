@@ -256,6 +256,175 @@ def build_dataframe() -> Tuple[Dict[str, Any], pd.DataFrame, Dict[str, Optional[
     return sheet, df, keys
 
 
+
+def build_governance_dataframe() -> Tuple[Dict[str, Any], pd.DataFrame, Dict[str, Optional[str]]]:
+    """Read Governance Register as its own dataframe.
+
+    Governance Register is the committed discussion/outcome/action layer.
+    This dataframe is later joined to source demands so dashboard criteria can
+    filter both: logged demands and governance commitments.
+    """
+    if not GOVERNANCE_SHEET_ID:
+        empty = pd.DataFrame()
+        return {"columns": [], "rows": [], "name": "Governance Register not configured"}, empty, {}
+    try:
+        sheet = get_governance_sheet(include="objectValue")
+    except Exception:
+        empty = pd.DataFrame()
+        return {"columns": [], "rows": [], "name": "Governance Register unavailable"}, empty, {}
+    rows = normalised_rows(sheet)
+    columns = [c["title"] for c in sheet.get("columns", [])]
+    df = pd.DataFrame(rows)
+    if df.empty:
+        df = pd.DataFrame(columns=columns + ["_row_id", "_row_number", "_created_at", "_modified_at"])
+    keys = {
+        "asr": "ASR Numbers Auto" if "ASR Numbers Auto" in df.columns else ("ASR Number" if "ASR Number" in df.columns else None),
+        "source_row_id": "Source Row ID" if "Source Row ID" in df.columns else None,
+        "target_pi": "Target PI" if "Target PI" in df.columns else None,
+        "decision": "Governance Decision" if "Governance Decision" in df.columns else ("Stakeholder Decision" if "Stakeholder Decision" in df.columns else None),
+        "action_required": "Action Required" if "Action Required" in df.columns else ("Next Action" if "Next Action" in df.columns else None),
+        "action_owner": "Action Owner" if "Action Owner" in df.columns else None,
+        "action_due": "Action Due Date" if "Action Due Date" in df.columns else None,
+        "readiness": "Demand Readiness" if "Demand Readiness" in df.columns else None,
+        "last_update": "Last RTE Update" if "Last RTE Update" in df.columns else None,
+    }
+    return sheet, df, keys
+
+
+def _normalise_join_key(value: Any) -> str:
+    return str(value or "").strip().upper()
+
+
+def build_governance_dashboard_dataframe() -> Tuple[Dict[str, Any], pd.DataFrame, Dict[str, Any]]:
+    """Combine source demand rows with Governance Register rows for dashboarding.
+
+    Output keeps normal demand columns as-is and prefixes register columns with
+    'Governance - '. This makes the dashboard criteria explicit and avoids
+    confusion about whether a filter is against demand intake data or committed
+    governance outcomes/actions.
+    """
+    source_sheet, source_df, source_keys = build_dataframe()
+    gov_sheet, gov_df, gov_keys = build_governance_dataframe()
+    merged = source_df.copy()
+
+    # Build source join keys.
+    ref_col = source_keys.get("reference")
+    if ref_col in merged.columns:
+        merged["_join_asr"] = merged[ref_col].apply(_normalise_join_key)
+    else:
+        merged["_join_asr"] = ""
+    merged["_join_source_row_id"] = merged.get("_row_id", pd.Series(dtype=str)).apply(_normalise_join_key)
+
+    if not gov_df.empty:
+        gov = gov_df.copy()
+        gov_asr_col = gov_keys.get("asr")
+        gov_row_id_col = gov_keys.get("source_row_id")
+        gov["_join_asr"] = gov[gov_asr_col].apply(_normalise_join_key) if gov_asr_col in gov.columns else ""
+        gov["_join_source_row_id"] = gov[gov_row_id_col].apply(_normalise_join_key) if gov_row_id_col in gov.columns else ""
+
+        # De-duplicate register to latest per ASR/source row so each demand appears once.
+        sort_col = "_modified_at" if "_modified_at" in gov.columns else "_row_number"
+        gov = gov.sort_values(sort_col).copy()
+        gov["_gov_match_key"] = gov["_join_asr"].where(gov["_join_asr"].ne(""), gov["_join_source_row_id"])
+        gov = gov[gov["_gov_match_key"].astype(str).ne("")]
+        gov = gov.drop_duplicates("_gov_match_key", keep="last")
+
+        # Prefix Governance Register columns.
+        keep_cols = [c for c in gov.columns if not c.endswith("_parsed")]
+        gov_pref = gov[keep_cols].rename(columns={c: f"Governance - {c}" for c in keep_cols if not c.startswith("_join") and c != "_gov_match_key"})
+        gov_pref["_gov_match_key"] = gov["_gov_match_key"]
+
+        merged["_gov_match_key"] = merged["_join_asr"].where(merged["_join_asr"].ne(""), merged["_join_source_row_id"])
+        merged = merged.merge(gov_pref, how="left", on="_gov_match_key")
+    else:
+        merged["_gov_match_key"] = merged["_join_asr"].where(merged["_join_asr"].ne(""), merged["_join_source_row_id"])
+
+    # Governance-derived flags for dashboard filtering and metrics.
+    gov_decision_col = "Governance - Governance Decision" if "Governance - Governance Decision" in merged.columns else "Governance - Stakeholder Decision"
+    gov_action_col = "Governance - Action Required" if "Governance - Action Required" in merged.columns else "Governance - Next Action"
+    gov_action_owner_col = "Governance - Action Owner"
+    gov_target_pi_col = "Governance - Target PI"
+    gov_readiness_col = "Governance - Demand Readiness"
+    gov_last_update_col = "Governance - Last RTE Update"
+    gov_due_col = "Governance - Action Due Date"
+
+    merged["_has_governance_commitment"] = False
+    for c in [gov_decision_col, gov_action_col, gov_target_pi_col, gov_last_update_col]:
+        if c in merged.columns:
+            merged["_has_governance_commitment"] = merged["_has_governance_commitment"] | merged[c].fillna("").astype(str).str.strip().ne("")
+    if gov_action_col in merged.columns:
+        merged["_has_open_action"] = merged[gov_action_col].fillna("").astype(str).str.strip().ne("")
+    else:
+        merged["_has_open_action"] = False
+    if gov_due_col in merged.columns:
+        due_dates = merged[gov_due_col].apply(parse_date)
+        merged["_governance_action_overdue"] = due_dates.apply(lambda d: bool(d is not None and d < pd.Timestamp.now())) & merged["_has_open_action"]
+    else:
+        merged["_governance_action_overdue"] = False
+
+    combined_keys: Dict[str, Any] = {
+        **source_keys,
+        "governance": gov_keys,
+        "gov_target_pi": gov_target_pi_col if gov_target_pi_col in merged.columns else None,
+        "gov_decision": gov_decision_col if gov_decision_col in merged.columns else None,
+        "gov_action_required": gov_action_col if gov_action_col in merged.columns else None,
+        "gov_action_owner": gov_action_owner_col if gov_action_owner_col in merged.columns else None,
+        "gov_action_due": gov_due_col if gov_due_col in merged.columns else None,
+        "gov_readiness": gov_readiness_col if gov_readiness_col in merged.columns else None,
+        "gov_last_update": gov_last_update_col if gov_last_update_col in merged.columns else None,
+    }
+    return source_sheet, merged, combined_keys
+
+
+def governance_dashboard_insights(df: pd.DataFrame, keys: Dict[str, Any]) -> Dict[str, Any]:
+    total = int(len(df))
+    committed = int(df.get("_has_governance_commitment", pd.Series([False]*len(df))).sum()) if total else 0
+    open_actions = int(df.get("_has_open_action", pd.Series([False]*len(df))).sum()) if total else 0
+    overdue_actions = int(df.get("_governance_action_overdue", pd.Series([False]*len(df))).sum()) if total else 0
+    target_pi_col = keys.get("gov_target_pi")
+    action_owner_col = keys.get("gov_action_owner")
+    decision_col = keys.get("gov_decision")
+    readiness_col = keys.get("gov_readiness")
+    action_col = keys.get("gov_action_required")
+    due_col = keys.get("gov_action_due")
+    ref_col = keys.get("reference")
+    demand_col = keys.get("demand")
+
+    action_rows = []
+    if total and action_col in df.columns:
+        actions_df = df[df[action_col].fillna("").astype(str).str.strip().ne("")].copy()
+        if due_col in actions_df.columns:
+            actions_df["_action_due_sort"] = actions_df[due_col].apply(parse_date)
+            actions_df = actions_df.sort_values(["_governance_action_overdue", "_action_due_sort"], ascending=[False, True], na_position="last")
+        for _, r in actions_df.head(50).iterrows():
+            action_rows.append({
+                "row_id": r.get("_row_id"),
+                "asr": r.get(ref_col, "") if ref_col else "",
+                "demand": r.get(demand_col, "") if demand_col else "",
+                "target_pi": r.get(target_pi_col, "") if target_pi_col else "",
+                "decision": r.get(decision_col, "") if decision_col else "",
+                "action_required": r.get(action_col, "") if action_col else "",
+                "action_owner": r.get(action_owner_col, "") if action_owner_col else "",
+                "action_due": r.get(due_col, "") if due_col else "",
+                "overdue": bool(r.get("_governance_action_overdue", False)),
+            })
+
+    return {
+        "metrics": {
+            "governance_committed": committed,
+            "governance_not_discussed": max(total - committed, 0),
+            "governance_open_actions": open_actions,
+            "governance_overdue_actions": overdue_actions,
+        },
+        "charts": {
+            "governance_by_pi": series_counts(df, target_pi_col),
+            "governance_action_owner": series_counts(df[df.get("_has_open_action", False)] if total else df, action_owner_col),
+            "governance_decision": series_counts(df, decision_col),
+            "governance_readiness": series_counts(df, readiness_col),
+        },
+        "actions": action_rows,
+    }
+
 def series_counts(df: pd.DataFrame, col: Optional[str], limit: int = 20) -> List[Dict[str, Any]]:
     if not col or col not in df.columns: return []
     s = df[col].fillna("Blank").replace("", "Blank").astype(str)
@@ -1132,23 +1301,43 @@ def api_dashboard():
 
 @app.post("/api/dashboard/filter")
 def api_dashboard_filter(payload: FilterPayload):
-    """Build the Executive Dashboard only from the selected criteria.
+    """Build the Executive Governance Dashboard from selected criteria.
 
-    Unlike /api/filter, this endpoint enriches first so dashboard-only fields
-    such as _is_closed, _health and _age_days can be used as criteria.
+    This endpoint now combines the source ASR demand sheet and the Governance
+    Register. Demand columns remain unchanged. Governance Register columns are
+    exposed as `Governance - <Column Name>`, so criteria can target either what
+    was logged or what was committed after governance discussions.
     """
-    sheet, df, keys = build_dataframe()
+    sheet, df, keys = build_governance_dashboard_dataframe()
     enriched_all = enrich_quality(df, keys)
     filtered = apply_filter_rules(enriched_all, payload) if payload.rules else enriched_all
     enriched = enrich_quality(filtered, keys)
     dashboard = dashboard_from_df(sheet, enriched, keys)
     v8 = v8_insights_from_df(enriched, keys)
+    gov = governance_dashboard_insights(enriched, keys)
     dashboard["v8"] = v8
+    dashboard["governance"] = gov
     dashboard["metrics"].update({"ready_percent": v8["summary"]["ready_percent"], "not_ready": v8["summary"]["not_ready"], "high_risk": v8["summary"]["high_risk"], "team_load_percent": v8["summary"]["team_load_percent"], "overloaded_resources": v8["summary"]["overloaded_resources"]})
+    dashboard["metrics"].update(gov.get("metrics", {}))
     dashboard["charts"].update(v8.get("charts", {}))
+    dashboard["charts"].update(gov.get("charts", {}))
     dashboard["dashboard_scope"] = "criteria" if payload.rules else "full"
     public = clean_public_df(enriched).head(max(1, min(payload.limit, 1000))).to_dict("records")
-    return {"summary": dashboard["metrics"], "dashboard": dashboard, "rows": public, "key_columns": keys, "columns": [c["title"] for c in sheet.get("columns", [])] + ["_health", "_age_days", "_age_bucket", "_is_overdue", "_is_closed", "_quality_score", "_readiness", "_confidence"], "applied_rules": [r.model_dump() for r in payload.rules], "logic": payload.logic}
+    dashboard_columns = [c for c in enriched.columns if not c.endswith("_parsed")]
+    return {"summary": dashboard["metrics"], "dashboard": dashboard, "rows": public, "key_columns": keys, "columns": dashboard_columns, "applied_rules": [r.model_dump() for r in payload.rules], "logic": payload.logic}
+
+
+@app.get("/api/governance-dashboard/columns")
+def api_governance_dashboard_columns():
+    sheet, df, keys = build_governance_dashboard_dataframe()
+    enriched = enrich_quality(df, keys)
+    demand_cols = [c for c in sheet.get("columns", [])]
+    return {
+        "demand_columns": [c.get("title") for c in demand_cols],
+        "governance_columns": sorted([c for c in enriched.columns if c.startswith("Governance - ")]),
+        "system_columns": ["_health", "_age_days", "_age_bucket", "_is_overdue", "_is_closed", "_readiness", "_confidence", "_has_governance_commitment", "_has_open_action", "_governance_action_overdue"],
+        "key_columns": keys,
+    }
 
 
 @app.post("/api/filter")
