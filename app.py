@@ -87,19 +87,38 @@ def smartsheet(method: str, path: str, **kwargs):
     raise HTTPException(status_code=502, detail=last_error or f"Unknown Smartsheet error calling {url}")
 
 
-def get_sheet(include: str = "objectValue") -> Dict[str, Any]:
+def get_sheet(include: str = "objectValue", use_cache: bool = True) -> Dict[str, Any]:
+    """Read the source Smartsheet with a short cache for better UX.
+
+    The Executive Dashboard now loads by criteria, and repeated filter/dashboard
+    actions should not force a full SmartSheet read every time. Any write action
+    calls invalidate_sheet_cache() so the next read is fresh.
+    """
+    now_ts = time.time()
+    if use_cache and _SHEET_CACHE.get("sheet") is not None and _SHEET_CACHE.get("include") == include and now_ts - float(_SHEET_CACHE.get("ts") or 0) < SHEET_CACHE_TTL_SECONDS:
+        return _SHEET_CACHE["sheet"]
+
     params = {"include": include} if include else {}
     try:
-        return smartsheet("GET", f"/sheets/{SHEET_ID}", params=params)
+        sheet = smartsheet("GET", f"/sheets/{SHEET_ID}", params=params)
     except HTTPException as exc:
         # If heavy source sheet read fails with include=objectValue, retry without include.
         # Most of this app only needs displayValue/value, not objectValue.
         if include:
             try:
-                return smartsheet("GET", f"/sheets/{SHEET_ID}", params={})
+                sheet = smartsheet("GET", f"/sheets/{SHEET_ID}", params={})
             except HTTPException:
                 raise exc
-        raise
+        else:
+            raise
+
+    if use_cache:
+        _SHEET_CACHE.update({"ts": now_ts, "include": include, "sheet": sheet})
+    return sheet
+
+
+def invalidate_sheet_cache():
+    _SHEET_CACHE.update({"ts": 0.0, "include": None, "sheet": None})
 
 
 def column_maps(sheet: Dict[str, Any]) -> Tuple[Dict[int, Dict[str, Any]], Dict[str, Dict[str, Any]]]:
@@ -1010,7 +1029,29 @@ def api_dashboard():
     dash["v8"] = v8
     dash["metrics"].update({"ready_percent": v8["summary"]["ready_percent"], "not_ready": v8["summary"]["not_ready"], "high_risk": v8["summary"]["high_risk"], "team_load_percent": v8["summary"]["team_load_percent"], "overloaded_resources": v8["summary"]["overloaded_resources"]})
     dash["charts"].update(v8.get("charts", {}))
+    dash["dashboard_scope"] = "full"
     return dash
+
+
+@app.post("/api/dashboard/filter")
+def api_dashboard_filter(payload: FilterPayload):
+    """Build the Executive Dashboard only from the selected criteria.
+
+    Unlike /api/filter, this endpoint enriches first so dashboard-only fields
+    such as _is_closed, _health and _age_days can be used as criteria.
+    """
+    sheet, df, keys = build_dataframe()
+    enriched_all = enrich_quality(df, keys)
+    filtered = apply_filter_rules(enriched_all, payload) if payload.rules else enriched_all
+    enriched = enrich_quality(filtered, keys)
+    dashboard = dashboard_from_df(sheet, enriched, keys)
+    v8 = v8_insights_from_df(enriched, keys)
+    dashboard["v8"] = v8
+    dashboard["metrics"].update({"ready_percent": v8["summary"]["ready_percent"], "not_ready": v8["summary"]["not_ready"], "high_risk": v8["summary"]["high_risk"], "team_load_percent": v8["summary"]["team_load_percent"], "overloaded_resources": v8["summary"]["overloaded_resources"]})
+    dashboard["charts"].update(v8.get("charts", {}))
+    dashboard["dashboard_scope"] = "criteria" if payload.rules else "full"
+    public = clean_public_df(enriched).head(max(1, min(payload.limit, 1000))).to_dict("records")
+    return {"summary": dashboard["metrics"], "dashboard": dashboard, "rows": public, "key_columns": keys, "columns": [c["title"] for c in sheet.get("columns", [])] + ["_health", "_age_days", "_age_bucket", "_is_overdue", "_is_closed", "_quality_score", "_readiness", "_confidence"], "applied_rules": [r.model_dump() for r in payload.rules], "logic": payload.logic}
 
 
 @app.post("/api/filter")
@@ -1070,7 +1111,9 @@ def add_row(payload: DemandPayload):
             cells.append({"columnId": col["id"], "value": value, "strict": False})
     if not cells:
         raise HTTPException(status_code=400, detail="No valid Smartsheet columns found in submitted values")
-    return smartsheet("POST", f"/sheets/{SHEET_ID}/rows", json=[{"toTop": payload.to_top, "cells": cells}])
+    res = smartsheet("POST", f"/sheets/{SHEET_ID}/rows", json=[{"toTop": payload.to_top, "cells": cells}])
+    invalidate_sheet_cache()
+    return res
 
 
 @app.put("/api/rows/{row_id}")
@@ -1084,7 +1127,9 @@ def update_row(row_id: int, payload: UpdatePayload):
             cells.append({"columnId": col["id"], "value": value, "strict": False})
     if not cells:
         raise HTTPException(status_code=400, detail="No valid Smartsheet columns found in submitted values")
-    return smartsheet("PUT", f"/sheets/{SHEET_ID}/rows", json=[{"id": row_id, "cells": cells}])
+    res = smartsheet("PUT", f"/sheets/{SHEET_ID}/rows", json=[{"id": row_id, "cells": cells}])
+    invalidate_sheet_cache()
+    return res
 
 
 @app.get("/api/rows/{row_id}")
@@ -1149,7 +1194,9 @@ def add_row_comment(row_id: int, payload: CommentPayload):
 
 @app.delete("/api/rows/{row_id}")
 def delete_row(row_id: int):
-    return smartsheet("DELETE", f"/sheets/{SHEET_ID}/rows", params={"ids": row_id})
+    res = smartsheet("DELETE", f"/sheets/{SHEET_ID}/rows", params={"ids": row_id})
+    invalidate_sheet_cache()
+    return res
 
 
 @app.get("/api/quality_scores")
