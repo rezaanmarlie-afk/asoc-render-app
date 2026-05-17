@@ -185,7 +185,8 @@
           <label class="label">Action Owner</label><input id="gov_action_owner" placeholder="Owner for next action">
           <label class="label">Next Action</label><textarea id="gov_next_action" placeholder="What must happen next?"></textarea>
           <label class="label">Discussion Summary</label><textarea id="gov_discussion_summary" placeholder="Meeting summary and agreed outcome"></textarea>
-          <div class="actions" style="margin-top:12px"><button class="btn ghost" onclick="checkGovernanceTemplate()">Check Governance Template</button><button class="btn secondary" onclick="scoreGovernanceOnly()">Score Only</button><button class="btn primary" onclick="submitGovernanceToRegister()">Submit to Governance Register</button></div>
+          <div class="actions" style="margin-top:12px"><button class="btn ghost" onclick="checkGovernanceTemplate()">Check Governance Template</button><button class="btn secondary" onclick="scoreGovernanceOnly()">Score Only</button><button class="btn primary" id="govSubmitBtn" onclick="submitGovernanceToRegister()">Submit to Governance Register</button></div>
+          <div id="govSubmitStatus" class="notice" style="display:none;margin-top:12px"></div>
           <pre id="govResult" style="margin-top:12px"></pre>
         </div>
       </div>
@@ -413,7 +414,34 @@ async function checkGovernanceTemplate(){
   }
 }
 
-async function submitGovernanceToRegister(){if(!CURRENT_GOV_ROW){alert('Select a demand first.');return;}setLoad(true);try{const res=await fetch(`/api/governance/submit/${CURRENT_GOV_ROW}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(governancePayload())}).then(ok);document.getElementById('govReadiness').textContent=res.readiness.status+' '+res.readiness.score+'%';document.getElementById('govWSJF').textContent=res.wsjf_score;document.getElementById('govRecommendation').textContent=res.rte_recommendation;document.getElementById('govResult').textContent=JSON.stringify(res,null,2);toast('Governance update saved to the Governance Register only.');await loadAll();}catch(e){alert('Governance submission failed: '+e.message)}finally{setLoad(false)}}
+async function submitGovernanceToRegister(){
+  if(!CURRENT_GOV_ROW){alert('Select a demand first.');return;}
+  const statusBox=document.getElementById('govSubmitStatus');
+  const submitBtn=document.getElementById('govSubmitBtn');
+  if(statusBox){statusBox.style.display='block';statusBox.textContent='Submitting governance update to Governance Register...';}
+  if(submitBtn){submitBtn.disabled=true;submitBtn.textContent='Submitting...';}
+  setLoad(true);
+  try{
+    const res=await fetch(`/api/governance/submit/${CURRENT_GOV_ROW}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(governancePayload())}).then(ok);
+    document.getElementById('govReadiness').textContent=res.readiness.status+' '+res.readiness.score+'%';
+    document.getElementById('govWSJF').textContent=res.wsjf_score;
+    document.getElementById('govRecommendation').textContent=res.rte_recommendation;
+    document.getElementById('govResult').textContent=JSON.stringify(res,null,2);
+    const action=res.status==='updated'?'updated existing row':'created new row';
+    const msg='Success: Governance Register '+action+' for '+(res.source_asr_number||('row '+CURRENT_GOV_ROW))+'.';
+    if(statusBox){statusBox.style.display='block';statusBox.textContent=msg+' '+(res.message||'');}
+    toast(msg);
+    await loadGovernanceDemand(CURRENT_GOV_ROW);
+    await loadAll();
+  }catch(e){
+    const msg='Governance submission failed: '+e.message;
+    if(statusBox){statusBox.style.display='block';statusBox.textContent=msg;}
+    alert(msg);
+  }finally{
+    if(submitBtn){submitBtn.disabled=false;submitBtn.textContent='Submit to Governance Register';}
+    setLoad(false);
+  }
+}
 
 function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('on');setTimeout(()=>t.classList.remove('on'),2600)}
 function esc(s){return String(s??"").replace(/\\/g,"\\\\").replace(/'/g,"\\u0027").replace(/\r?\n/g," ")}

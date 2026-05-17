@@ -756,30 +756,87 @@ def ensure_governance_register_template() -> Dict[str, Any]:
     }
 
 
+def _normalise_key(value: Any) -> str:
+    """Normalise values for Governance Register matching."""
+    return str(value or "").strip().upper()
+
+
+def find_governance_register_row(
+    gov_sheet: Dict[str, Any],
+    source_row_id: Any,
+    source_row_number: Any = None,
+    asr_number: str = "",
+) -> Optional[Tuple[Dict[str, Any], Dict[str, Any]]]:
+    """
+    Find the existing Governance Register row to update.
+
+    Matching priority:
+    1. ASR Numbers Auto / ASR Number - this is the business key requested by the user.
+    2. Source Row ID - fallback if ASR is blank.
+    3. Source Row Number - final fallback for older register rows.
+    """
+    by_id, _ = column_maps(gov_sheet)
+    target_asr = _normalise_key(asr_number)
+    target_row_id = _normalise_key(source_row_id)
+    target_row_no = _normalise_key(source_row_number)
+
+    fallback = None
+    for row in gov_sheet.get("rows", []):
+        rec = row_to_dict(row, by_id)
+        row_asr_1 = _normalise_key(rec.get("ASR Numbers Auto"))
+        row_asr_2 = _normalise_key(rec.get("ASR Number"))
+        row_source_id = _normalise_key(rec.get("Source Row ID"))
+        row_source_no = _normalise_key(rec.get("Source Row Number"))
+
+        if target_asr and (row_asr_1 == target_asr or row_asr_2 == target_asr):
+            return row, rec
+
+        if target_row_id and row_source_id == target_row_id:
+            fallback = fallback or (row, rec)
+
+        if not fallback and target_row_no and row_source_no == target_row_no:
+            fallback = (row, rec)
+
+    return fallback
+
+
 def latest_governance_for_source_row(source_row_id: int) -> Optional[Dict[str, Any]]:
-    """Return the latest Governance Register row for a source demand row, if present."""
+    """Return the existing Governance Register row for a source demand row, if present."""
     if not GOVERNANCE_SHEET_ID:
         return None
     try:
+        source_sheet = get_sheet(include="objectValue")
+        source_by_id, _ = column_maps(source_sheet)
+        keys = infer_key_columns([c.get("title", "") for c in source_sheet.get("columns", [])])
+        source_row = next((r for r in source_sheet.get("rows", []) if int(r.get("id")) == int(source_row_id)), None)
+        source_record = row_to_dict(source_row, source_by_id) if source_row else {}
+        ref_col = keys.get("reference")
+        asr_number = str(source_record.get(ref_col, "") or "") if ref_col else ""
+
         gov_sheet = get_governance_sheet(include="objectValue")
-        by_id, _ = column_maps(gov_sheet)
-        candidates = []
-        for row in gov_sheet.get("rows", []):
-            rec = row_to_dict(row, by_id)
-            if str(rec.get("Source Row ID", "")).strip() == str(source_row_id) or str(rec.get("Source Row Number", "")).strip() == str(source_row_id):
-                rec["_governance_row_id"] = row.get("id")
-                rec["_governance_row_number"] = row.get("rowNumber")
-                candidates.append(rec)
-        candidates.sort(key=lambda r: str(r.get("RTE Discussion Date") or r.get("Last RTE Update") or r.get("_modified_at") or ""), reverse=True)
-        return candidates[0] if candidates else None
+        match = find_governance_register_row(
+            gov_sheet,
+            source_row_id=source_row_id,
+            source_row_number=source_row.get("rowNumber") if source_row else None,
+            asr_number=asr_number,
+        )
+        if not match:
+            return None
+        row, rec = match
+        rec["_governance_row_id"] = row.get("id")
+        rec["_governance_row_number"] = row.get("rowNumber")
+        return rec
     except Exception:
         return None
 
 
 def create_governance_register_row(source_row_id: int, payload: GovernancePayload) -> Dict[str, Any]:
     """
-    Create a new governance record in the separate Governance Register sheet.
+    Upsert a governance record in the separate Governance Register sheet.
     The source ASR sheet is not modified.
+
+    Important: if a Governance Register row already exists for the ASR Number,
+    the row is updated instead of creating duplicates.
     """
     source_sheet = get_sheet(include="objectValue")
     source_by_id, _ = column_maps(source_sheet)
@@ -810,7 +867,20 @@ def create_governance_register_row(source_row_id: int, payload: GovernancePayloa
 
     asr_number = source_value("reference")
     demand_title = source_value("demand")
-    governance_record_id = f"{asr_number or source_row_id}-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+    gov_sheet_for_match = get_governance_sheet(include="objectValue")
+    existing_match = find_governance_register_row(
+        gov_sheet_for_match,
+        source_row_id=source_row.get("id"),
+        source_row_number=source_row.get("rowNumber"),
+        asr_number=asr_number,
+    )
+    existing_row = existing_match[0] if existing_match else None
+    existing_record = existing_match[1] if existing_match else {}
+
+    governance_record_id = (
+        existing_record.get("Governance Record ID")
+        or f"{asr_number or source_row_id}-GOV"
+    )
 
     def fmt_date(v: Any) -> Any:
         dt = parse_date(v)
@@ -896,15 +966,37 @@ def create_governance_register_row(source_row_id: int, payload: GovernancePayloa
             },
         )
 
-    result = smartsheet("POST", f"/sheets/{GOVERNANCE_SHEET_ID}/rows", json=[{"toTop": True, "cells": cells}])
+    if existing_row:
+        result = smartsheet(
+            "PUT",
+            f"/sheets/{GOVERNANCE_SHEET_ID}/rows",
+            json=[{"id": existing_row.get("id"), "cells": cells}],
+        )
+        operation = "updated"
+        user_message = f"Governance Register updated for {asr_number or source_row_id}. No duplicate row was created."
+        governance_row_id = existing_row.get("id")
+    else:
+        result = smartsheet(
+            "POST",
+            f"/sheets/{GOVERNANCE_SHEET_ID}/rows",
+            json=[{"toTop": True, "cells": cells}],
+        )
+        operation = "created"
+        user_message = f"Governance Register created for {asr_number or source_row_id}."
+        try:
+            governance_row_id = (result.get("result") or [{}])[0].get("id")
+        except Exception:
+            governance_row_id = None
 
     # Governance updates intentionally write to the Governance Register only.
     # The source demand sheet remains read-only in the governance workflow.
     source_comment_added = False
 
     return {
-        "status": "created",
+        "status": operation,
+        "message": user_message,
         "governance_record_id": governance_record_id,
+        "governance_row_id": governance_row_id,
         "source_row_id": source_row_id,
         "source_asr_number": asr_number,
         "readiness": readiness,
