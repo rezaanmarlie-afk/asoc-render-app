@@ -680,28 +680,61 @@ def governance_template_status() -> Dict[str, Any]:
 
 
 def ensure_governance_register_template() -> Dict[str, Any]:
-    """Auto-add missing Governance Register columns so submit does not fail."""
-    sheet = get_governance_sheet(include="")
-    _, by_title = column_maps(sheet)
-    missing = [c for c in governance_template_columns() if c["title"].strip().lower() not in by_title]
-    if not missing:
-        return {"status": "ready", "added_columns": [], "governance_sheet_id": GOVERNANCE_SHEET_ID}
+    """
+    Auto-add missing Governance Register columns so submit does not fail.
 
-    current_count = len(sheet.get("columns", []))
-    new_columns = []
-    for idx, col in enumerate(missing):
+    Important Smartsheet fix:
+    Smartsheet can reject a bulk column-create request when the submitted
+    column indexes are not aligned with the first input column index. To avoid
+    error 1135, columns are added one-by-one at the current end of the sheet.
+    After each add, the sheet is refreshed so the next index is always correct.
+    """
+    added_columns: List[str] = []
+
+    # Loop because the sheet structure changes after every added column.
+    for expected_col in governance_template_columns():
+        sheet = get_governance_sheet(include="")
+        _, by_title = column_maps(sheet)
+
+        title = expected_col["title"]
+        key = title.strip().lower()
+        if key in by_title:
+            continue
+
         column_payload = {
-            "title": col["title"],
-            "type": col.get("type") or "TEXT_NUMBER",
-            "index": current_count + idx,
+            "title": title,
+            "type": expected_col.get("type") or "TEXT_NUMBER",
+            "index": len(sheet.get("columns", [])),
         }
-        options = governance_picklist_options(col["title"])
+
+        options = governance_picklist_options(title)
         if options:
             column_payload["options"] = options
-        new_columns.append(column_payload)
 
-    result = smartsheet("POST", f"/sheets/{GOVERNANCE_SHEET_ID}/columns", json=new_columns)
-    return {"status": "repaired", "added_columns": [c["title"] for c in missing], "result": result, "governance_sheet_id": GOVERNANCE_SHEET_ID}
+        try:
+            smartsheet("POST", f"/sheets/{GOVERNANCE_SHEET_ID}/columns", json=[column_payload])
+            added_columns.append(title)
+        except HTTPException as exc:
+            # If another deploy/user added it between refresh and create, continue safely.
+            latest_sheet = get_governance_sheet(include="")
+            _, latest_by_title = column_maps(latest_sheet)
+            if key in latest_by_title:
+                continue
+            raise exc
+
+    final_sheet = get_governance_sheet(include="")
+    _, final_by_title = column_maps(final_sheet)
+    still_missing = [
+        c["title"] for c in governance_template_columns()
+        if c["title"].strip().lower() not in final_by_title
+    ]
+
+    return {
+        "status": "ready" if not added_columns else "repaired",
+        "added_columns": added_columns,
+        "still_missing_columns": still_missing,
+        "governance_sheet_id": GOVERNANCE_SHEET_ID,
+    }
 
 
 def latest_governance_for_source_row(source_row_id: int) -> Optional[Dict[str, Any]]:
