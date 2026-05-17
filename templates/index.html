@@ -162,7 +162,7 @@ table{min-width:max-content}td{max-width:520px;word-break:break-word}.wide-text{
             </div>
             <div>
               <h4 style="margin:0 0 8px">SmartSheet Comments</h4><p class="muted" style="margin:0 0 8px">Loaded directly from the selected demand row discussions.</p>
-              <div id="govComments" class="gov-detail-box gov-comments"><p class="muted">Select a demand to load row-level comments.</p></div>
+              <div id="govCommentsStatus" class="muted" style="margin-bottom:8px">Select a demand to load comments.</div><div id="govComments" class="gov-detail-box gov-comments"><p class="muted">Select a demand to load row-level comments.</p></div>
             </div>
           </div>
           <div style="margin-top:12px">
@@ -241,7 +241,7 @@ table{min-width:max-content}td{max-width:520px;word-break:break-word}.wide-text{
 <div id="detailModal" class="modal">
   <div class="detail-panel">
     <div class="detail-head"><div><h3 id="detailTitle" style="margin:0">Demand Detail</h3><p id="detailSub" class="muted" style="margin:5px 0 0">Select a demand to view and update all Smartsheet columns.</p></div><div class="actions"><button class="btn ghost" onclick="reloadCurrentDetail()">Reload Detail</button><button class="btn primary" onclick="saveDemandDetail()">Save Changes to Smartsheet</button><button class="btn ghost" onclick="closeDetail()">Close</button></div></div>
-    <div class="detail-body"><div class="detail-layout"><div><h3 style="margin-top:0">Demand Fields</h3><div id="detailFields" class="detail-grid"></div></div><aside class="comments-panel"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center"><div><h3 style="margin:0">Comments</h3><p class="muted" style="margin:4px 0 0">Row-level Smartsheet discussions, not sheet columns.</p></div><button class="btn ghost mini" onclick="loadComments()">Refresh</button></div><div id="commentsStatus" class="muted" style="margin-top:10px">Select a demand to load comments.</div><div id="commentsList" class="comment-list"></div><div class="comment-box"><textarea id="newCommentText" placeholder="Add a Smartsheet comment for this demand..."></textarea><button class="btn primary" onclick="addComment()">Add Comment to Smartsheet</button></div></aside></div></div>
+    <div class="detail-body"><div class="detail-layout"><div><h3 style="margin-top:0">Demand Fields</h3><div id="detailFields" class="detail-grid"></div></div><aside class="comments-panel"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center"><div><h3 style="margin:0">SmartSheet Comments</h3><p class="muted" style="margin:4px 0 0">Row-level SmartSheet discussions/comments for the selected demand.</p></div><button class="btn ghost mini" onclick="loadComments()">Refresh</button></div><div id="commentsStatus" class="muted" style="margin-top:10px">Select a demand to load comments.</div><div id="commentsList" class="comment-list"></div><div class="comment-box"><textarea id="newCommentText" placeholder="Add a Smartsheet comment for this demand..."></textarea><button class="btn primary" onclick="addComment()">Add Comment to Smartsheet</button></div></aside></div></div>
     <div class="detail-foot"><span id="detailStatus" class="muted">No demand loaded.</span><span class="muted">Locked/system columns are shown as read-only.</span></div>
   </div>
 </div>
@@ -268,7 +268,7 @@ function renderGovernanceActions(){
   if(!div)return;
   const items=(DASH.governance&&DASH.governance.actions)||[];
   if(!items.length){div.innerHTML='<p class="muted">No governance actions found for the selected criteria.</p>';return;}
-  div.innerHTML='<table><thead><tr><th>ASR</th><th>Target PI</th><th>Decision</th><th>Action</th><th>Owner</th><th>Due</th><th>Open</th><th>View</th></tr></thead><tbody>'+items.map(x=>`<tr><td>${escapeHtml(x.asr||'')}</td><td>${escapeHtml(x.target_pi||'')}</td><td>${escapeHtml(x.decision||'')}</td><td>${escapeHtml(x.action_required||'')}</td><td>${escapeHtml(x.action_owner||'')}</td><td>${escapeHtml(x.action_due||'')}</td><td>${x.overdue?'<span class="pill health-Overdue">Overdue</span>':'<span class="pill">Open</span>'}</td><td>${x.row_id?`<button class="btn secondary mini" onclick="openGovernance(${x.row_id})">Discuss / Comments</button>`:''}</td></tr><tr><td colspan="8" class="muted">${escapeHtml(x.demand||'')}</td></tr>`).join('')+'</tbody></table>';
+  div.innerHTML='<table><thead><tr><th>ASR</th><th>Target PI</th><th>Decision</th><th>Action</th><th>Owner</th><th>Due</th><th>Open</th><th>View</th></tr></thead><tbody>'+items.map(x=>`<tr><td>${escapeHtml(x.asr||'')}</td><td>${escapeHtml(x.target_pi||'')}</td><td>${escapeHtml(x.decision||'')}</td><td>${escapeHtml(x.action_required||'')}</td><td>${escapeHtml(x.action_owner||'')}</td><td>${escapeHtml(x.action_due||'')}</td><td>${x.overdue?'<span class="pill health-Overdue">Overdue</span>':'<span class="pill">Open</span>'}</td><td>${x.row_id?`<button class="btn secondary mini" onclick="openGovernance(${x.row_id})">Discuss / SmartSheet Comments</button>`:''}</td></tr><tr><td colspan="8" class="muted">${escapeHtml(x.demand||'')}</td></tr>`).join('')+'</tbody></table>';
 }
 function updateBanner(){const b=document.getElementById('filterBanner');if(CURRENT_DASH_SOURCE==='filtered'||CURRENT_DASH_SOURCE==='criteria'){b.classList.add('on');b.innerHTML='Dashboard is showing a criteria-filtered demand set. Click <b>Reset Dashboard</b> to clear the view, or <b>Load Full Dashboard</b> if you really need everything.';}else{b.classList.remove('on');b.innerHTML='';}}
 function clearDashboardFilter(){DASH=null;CURRENT_DASH_SOURCE='not_loaded';renderDashboardNotLoaded();updateBanner();}
@@ -375,8 +375,8 @@ function renderGovDetailTable(record){
   return rows?`<table><tbody>${rows}</tbody></table>`:'<p class="muted">No details available.</p>';
 }
 function renderGovComments(comments){
-  if(!comments||!comments.length)return '<p class="muted">No Smartsheet comments found for this demand.</p>';
-  return comments.map(c=>`<div class="comment-item"><div class="comment-meta"><b>${escapeHtml(c.created_by||'Smartsheet User')}</b> - ${escapeHtml(c.created_at||'')}</div><div class="comment-text">${escapeHtml(c.text||'')}</div></div>`).join('');
+  if(!comments||!comments.length)return '<p class="muted">No SmartSheet comments found for this demand.</p>';
+  return comments.map(c=>`<div class="comment-item"><div class="comment-meta"><b>${escapeHtml(c.created_by||'SmartSheet User')}</b> - ${escapeHtml(c.created_at||'')}</div><div class="comment-text">${escapeHtml(c.text||'')}</div></div>`).join('');
 }
 async function loadGovernanceDemand(rowId){
   setLoad(true);
@@ -394,6 +394,9 @@ async function loadGovernanceDemand(rowId){
     document.getElementById('govRow').textContent=ref;
     document.getElementById('govDemandContext').innerHTML=`<b>${escapeHtml(ref)}</b><br>${escapeHtml(title)}<br><br><span class="pill">${escapeHtml(status)}</span><br><br><b>Analysis:</b><br>${escapeHtml(analysis)}<br><br><b>Owner:</b> ${escapeHtml(assignee)}<br><b>Requestor:</b> ${escapeHtml(requestor)}<br><b>Source Row ID:</b> ${d.row_id}<br><br><span class="pill">Updates save to Governance Register only</span>`;
     document.getElementById('govAllDetails').innerHTML=renderGovDetailTable(d.record||{});
+    const govCommentCount=(bundle.comments||[]).length;
+    const govCommentsStatus=document.getElementById('govCommentsStatus');
+    if(govCommentsStatus) govCommentsStatus.textContent=govCommentCount ? `${govCommentCount} SmartSheet comment(s) loaded from the source demand row.` : 'No SmartSheet comments found for this source demand row.';
     document.getElementById('govComments').innerHTML=renderGovComments(bundle.comments||[]);
     document.getElementById('govLatestRegister').innerHTML=bundle.latest_governance?renderGovDetailTable(bundle.latest_governance):'<p class="muted">No previous Governance Register entry found for this demand.</p>';
 
