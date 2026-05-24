@@ -771,8 +771,8 @@ def get_governance_sheet(include: str = "objectValue") -> Dict[str, Any]:
 def governance_template_columns() -> List[Dict[str, str]]:
     """
     Enterprise Governance Register template.
-    The source ASR sheet is read-only for governance discussions.
-    All governance updates are written into this Governance Register sheet.
+    Governance updates are written into the Governance Register sheet.
+    Discussion status is also written back into the source ASR sheet.
     Missing columns are auto-created before submit.
     """
     text = "TEXT_NUMBER"
@@ -885,7 +885,14 @@ def ensure_source_discussion_columns() -> Dict[str, Any]:
         if title.strip().lower() in by_title:
             skipped.append(title)
             continue
-        payload = {"title": title, "type": expected["type"]}
+        payload = {
+            "title": title,
+            "type": expected["type"],
+            # Smartsheet requires an explicit index when creating columns.
+            # Add each missing discussion column at the current end of the sheet,
+            # then refresh before adding the next one.
+            "index": len(sheet.get("columns", [])),
+        }
         if expected.get("type") == "PICKLIST" and expected.get("options"):
             payload["options"] = expected["options"]
         smartsheet("POST", f"/sheets/{SHEET_ID}/columns", json=[payload])

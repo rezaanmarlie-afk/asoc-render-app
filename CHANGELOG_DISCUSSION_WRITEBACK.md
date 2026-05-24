@@ -46,3 +46,7 @@ After a demand is submitted in the Governance Control Tower:
 - The demand drops out of the default governance discussion queue.
 - You can still find it by selecting `Discussed Already only` or `All demands`.
 
+
+## 2026-05-24 Fix
+- Fixed Smartsheet source-sheet discussion column creation by adding the required `index` attribute when creating missing columns.
+- Kept the full existing app.py codebase and only patched the column creation/writeback logic.
