@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ASOC Demand Governance Control Tower</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root{--bg:#f4f6fa;--panel:#fff;--ink:#111827;--muted:#667085;--line:#e5e7eb;--vodacom:#e60000;--dark:#0b1220;--ok:#16a34a;--warn:#f59e0b;--bad:#dc2626;--blue:#2563eb}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,Segoe UI,Arial,sans-serif}.shell{display:grid;grid-template-columns:280px 1fr;min-height:100vh}.side{background:linear-gradient(180deg,#0b1220,#1f2937);color:white;padding:24px;position:sticky;top:0;height:100vh}.logo{display:flex;align-items:center;gap:13px;margin-bottom:26px}.round{width:42px;height:42px;border-radius:50%;background:var(--vodacom);box-shadow:0 14px 40px rgba(230,0,0,.35)}h1{font-size:19px;margin:0}.small{font-size:12px;color:#cbd5e1;line-height:1.45}.nav button,.nav a{width:100%;display:block;text-align:left;border:0;text-decoration:none;color:#dbeafe;background:transparent;padding:13px 14px;border-radius:14px;cursor:pointer;margin:5px 0;font-weight:650}.nav button.active,.nav button:hover,.nav a:hover{background:rgba(255,255,255,.12);color:#fff}.main{padding:24px 28px}.topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}.title h2{margin:0;font-size:28px}.title p{margin:5px 0 0;color:var(--muted)}.actions{display:flex;gap:10px;flex-wrap:wrap}.btn{border:0;border-radius:12px;padding:11px 14px;font-weight:750;cursor:pointer}.primary{background:var(--vodacom);color:white;text-decoration:none}.secondary{background:#111827;color:white}.ghost{background:white;color:#111827;border:1px solid var(--line)}.soft{background:#eef2ff;color:#3730a3}.cards{display:grid;grid-template-columns:repeat(5,minmax(135px,1fr));gap:14px}.card{background:var(--panel);border:1px solid var(--line);border-radius:22px;box-shadow:0 12px 35px rgba(15,23,42,.06);padding:18px}.metric{font-size:31px;font-weight:900;margin-top:8px}.label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}.grid{display:grid;grid-template-columns:1.2fr .8fr;gap:16px;margin-top:16px}.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:16px}.section{display:none}.section.active{display:block}input,select,textarea{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:12px;background:#fff}textarea{min-height:90px}.toolbar{display:grid;grid-template-columns:2fr 1fr auto;gap:10px;margin:12px 0}.filterbar{display:grid;grid-template-columns:1.4fr 1fr 1.3fr auto;gap:10px;align-items:center;margin:10px 0}.scroll{overflow:auto;max-height:630px}table{width:100%;border-collapse:separate;border-spacing:0 8px}th{text-align:left;font-size:12px;color:var(--muted);padding:8px;white-space:nowrap}td{background:white;border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:10px;vertical-align:top;min-width:120px}td:first-child{border-left:1px solid var(--line);border-radius:12px 0 0 12px}td:last-child{border-right:1px solid var(--line);border-radius:0 12px 12px 0}.pill{display:inline-block;padding:5px 9px;border-radius:999px;background:#f1f5f9;font-size:12px;font-weight:750}.health-Overdue{background:#fee2e2;color:#991b1b}.health-Aging{background:#fef3c7;color:#92400e}.health-Healthy{background:#dcfce7;color:#166534}.health-Closed{background:#e0e7ff;color:#3730a3}.danger{background:var(--bad);color:white;border:0;border-radius:10px;padding:8px;cursor:pointer}.formgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.suggestions{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}.chip{border:1px solid var(--line);background:#fff;border-radius:999px;padding:9px 12px;cursor:pointer}.result-card{border-left:5px solid var(--vodacom);margin:10px 0}.insight{line-height:1.6;color:#344054}.muted{color:var(--muted)}pre{white-space:pre-wrap;background:#0b1220;color:#d1fae5;border-radius:18px;padding:14px}.loader{display:none;color:var(--muted);font-weight:750}.loader.on{display:block}.filter-rule,.gov-detail-rule{border:1px solid var(--line);border-radius:18px;padding:12px;background:#fafafa;margin:10px 0}.filter-head{display:flex;justify-content:space-between;gap:10px;align-items:center}.mini{font-size:12px;padding:7px 10px}.banner{border:1px dashed #fca5a5;background:#fff1f2;color:#991b1b;padding:12px;border-radius:16px;margin:12px 0;display:none}.banner.on{display:block}.split{display:grid;grid-template-columns:.9fr 1.1fr;gap:16px}.summary-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:12px 0}.summary-strip div{background:#f8fafc;border:1px solid var(--line);border-radius:14px;padding:12px}.summary-strip b{display:block;font-size:24px}.modal{position:fixed;inset:0;background:rgba(15,23,42,.58);display:none;align-items:flex-start;justify-content:center;padding:28px;z-index:50}.modal.on{display:flex}.detail-panel{background:#fff;border-radius:24px;box-shadow:0 24px 80px rgba(0,0,0,.25);width:min(1180px,96vw);max-height:92vh;overflow:hidden;display:grid;grid-template-rows:auto 1fr auto}.detail-head{padding:18px 22px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:flex-start;gap:12px}.detail-body{padding:18px 22px;overflow:auto}.detail-grid{display:grid;grid-template-columns:repeat(2,minmax(260px,1fr));gap:14px}.field-card{border:1px solid var(--line);border-radius:16px;background:#fafafa;padding:12px}.field-card.locked{opacity:.68;background:#f3f4f6}.field-meta{font-size:11px;color:var(--muted);margin-top:4px}.detail-foot{padding:14px 22px;border-top:1px solid var(--line);display:flex;justify-content:space-between;gap:10px;align-items:center;background:#fff}.dirty{border-color:#f59e0b!important;box-shadow:0 0 0 3px rgba(245,158,11,.13)}.toast{position:fixed;right:24px;bottom:24px;background:#111827;color:white;border-radius:14px;padding:12px 14px;display:none;z-index:60}.toast.on{display:block}.detail-layout{display:grid;grid-template-columns:1.2fr .8fr;gap:18px}.comments-panel{border:1px solid var(--line);border-radius:18px;background:#fff;padding:14px;height:max-content;position:sticky;top:0}.comment-list{max-height:460px;overflow:auto;margin:12px 0}.comment-item{border:1px solid var(--line);border-radius:14px;background:#f8fafc;padding:11px;margin:9px 0}.comment-meta{font-size:11px;color:var(--muted);margin-bottom:6px}.comment-text{white-space:pre-wrap;line-height:1.45}.comment-box{display:grid;gap:8px}.gov-check label{display:block;margin:10px 0;font-weight:650}.gov-check input{width:auto;margin-right:8px}
+@media(max-width:1200px){.shell{grid-template-columns:1fr}.side{height:auto;position:relative}.cards,.grid,.grid3,.toolbar,.formgrid,.filterbar,.split,.summary-strip{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+<div class="shell">
+  <aside class="side">
+    <div class="logo"><div class="round"></div><div><h1>ASOC Demand Governance Control Tower</h1><div class="small">Enterprise Smartsheet cockpit<br>Source Sheet {{ sheet_id }}<br>Governance Sheet {{ governance_sheet_id }}</div></div></div>
+    <div class="nav">
+      <button class="active" onclick="show('dashboard',this)">Executive Dashboard</button>
+      <button onclick="show('interrogate',this)">Interrogate</button>
+      <button onclick="show('governance',this);renderGovernanceSearch()">Governance Control Tower</button>
+      <button onclick="show('manager',this)">Manager View</button>
+      <button onclick="show('capacity',this)">Capacity</button>
+      <button onclick="show('risk',this)">Risk</button>
+      <button onclick="show('register',this)">Demand Register</button>
+      <button onclick="show('add',this)">Add Demand</button>
+      <a href="{{ sheet_link }}" target="_blank">Open Smartsheet</a>
+    </div>
+    <p class="small" style="margin-top:28px">Live demand governance: readiness, WSJF, stakeholder decisions and Smartsheet write-back.</p>
+  </aside>
+  <main class="main">
+    <div class="topbar">
+      <div class="title"><h2 id="pageTitle">Executive Dashboard</h2><p id="pageSub">Portfolio health, workload, aging, risk and demand throughput view.</p></div>
+      <div class="actions"><span id="loading" class="loader">Refreshing...</span><button class="btn ghost" onclick="loadAll()">Refresh</button><button class="btn ghost" onclick="clearDashboardFilter()">Reset Dashboard</button><a class="btn primary" href="/api/export/excel">Export Excel</a></div>
+    </div>
+
+    <div id="filterBanner" class="banner"></div>
+
+    <section id="dashboard" class="section active">
+      <div class="cards">
+        <div class="card"><div class="label">Total</div><div id="mTotal" class="metric">-</div></div>
+        <div class="card"><div class="label">Open</div><div id="mOpen" class="metric">-</div></div>
+        <div class="card"><div class="label">Closed</div><div id="mClosed" class="metric">-</div></div>
+        <div class="card"><div class="label">Overdue</div><div id="mOverdue" class="metric">-</div></div>
+        <div class="card"><div class="label">Aging >30d</div><div id="mAging" class="metric">-</div></div>
+        <div class="card"><div class="label">Avg Open Age</div><div id="mAvg" class="metric">-</div></div>
+        <div class="card"><div class="label">% Ready</div><div id="mReady" class="metric">-</div></div>
+        <div class="card"><div class="label">Not Ready</div><div id="mNotReady" class="metric">-</div></div>
+        <div class="card"><div class="label">High Risk</div><div id="mHighRisk" class="metric">-</div></div>
+        <div class="card"><div class="label">Team Load</div><div id="mTeamLoad" class="metric">-</div></div>
+      </div>
+      <div class="grid"><div class="card"><h3>Demand Health</h3><canvas id="healthChart"></canvas></div><div class="card"><h3>Priority / Criticality</h3><canvas id="priorityChart"></canvas></div></div>
+      <div class="grid"><div class="card"><h3>Readiness Distribution</h3><canvas id="readinessChart"></canvas></div><div class="card"><h3>Confidence Level</h3><canvas id="confidenceChart"></canvas></div></div>
+      <div class="grid3"><div class="card"><h3>Status Distribution</h3><canvas id="statusChart"></canvas></div><div class="card"><h3>Open Workload by Assignee</h3><canvas id="assigneeChart"></canvas></div><div class="card"><h3>Age Buckets</h3><canvas id="ageChart"></canvas></div></div>
+      <div class="card" style="margin-top:16px"><h3>Executive Risk Watchlist</h3><div id="riskList" class="scroll"></div></div>
+    </section>
+
+    <section id="interrogate" class="section">
+      <div class="split">
+        <div class="card">
+          <h3>Enterprise Filter Builder</h3><p class="muted">Pick a Smartsheet column, choose criteria, add multiple rules, then apply. The dashboard recalculates from the same filtered result set.</p>
+          <div class="summary-strip"><div><span class="label">Matched</span><b id="fMatched">-</b></div><div><span class="label">Open</span><b id="fOpen">-</b></div><div><span class="label">Overdue</span><b id="fOverdue">-</b></div><div><span class="label">Avg Age</span><b id="fAvg">-</b></div></div>
+          <div style="display:flex;gap:10px;align-items:center;margin:10px 0"><label class="label" style="width:auto">Rule Logic</label><select id="filterLogic" style="max-width:130px"><option>AND</option><option>OR</option></select><button class="btn soft" onclick="addRule()">+ Add Rule</button><button class="btn ghost" onclick="clearRules()">Clear</button></div>
+          <div id="rules"></div>
+          <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap"><button class="btn primary" onclick="applyFilter(true)">Apply + Update Dashboard</button><button class="btn secondary" onclick="applyFilter(false)">Search Only</button></div>
+          <h4>Quick enterprise queries</h4><div class="suggestions" id="suggestions"></div>
+        </div>
+        <div class="card"><h3>Filtered Results</h3><p class="muted" id="activeRulesText">No filter applied yet.</p><div class="scroll"><table id="filterResults"></table></div></div>
+      </div>
+    </section>
+
+    <section id="governance" class="section">
+      <div class="split">
+        <div class="card">
+          <h3>Stakeholder Discussion Mode</h3>
+          <p class="muted">Select an existing ASR demand, guide the discussion, score readiness and WSJF, then create a clean governance record in the separate Governance Register sheet.</p>
+          <div class="summary-strip">
+            <div><span class="label">Selected</span><b id="govRow">-</b></div>
+            <div><span class="label">Readiness</span><b id="govReadiness">-</b></div>
+            <div><span class="label">WSJF</span><b id="govWSJF">-</b></div>
+            <div><span class="label">Recommendation</span><b id="govRecommendation" style="font-size:16px">-</b></div>
+          </div>
+          <label class="label">Search Existing Demands</label>
+          <input id="govSearch" placeholder="Search ASR, demand title, owner, requestor..." oninput="renderGovernanceSearch()">
+          <div class="scroll" style="max-height:360px;margin-top:10px"><table id="govSearchTable"></table></div>
+        </div>
+        <div class="card">
+          <h3>Demand Context</h3>
+          <p id="govDemandContext" class="muted">Select an existing demand from the list.</p>
+          <label class="label">Business Outcome</label><textarea id="gov_business_outcome" placeholder="What business outcome is expected?"></textarea>
+          <label class="label">Urgency Reason</label><textarea id="gov_urgency_reason" placeholder="Why now? What happens if not delivered this PI?"></textarea>
+          <label class="label">Meeting Attendees</label><input id="gov_meeting_attendees" placeholder="Stakeholders present">
+        </div>
+      </div>
+      <div class="grid" style="margin-top:16px">
+        <div class="card">
+          <h3>Readiness Gate</h3>
+          <div class="gov-check">
+            <div class="gov-detail-rule">
+              <label><input type="checkbox" id="gov_scope_clear" onchange="scoreGovernanceOnly()"> Scope is clear</label>
+              <textarea id="gov_scope_clear_detail" placeholder="Add scope detail: what is clear, what is included/excluded, open scope questions..." oninput="scoreGovernanceOnly()"></textarea>
+            </div>
+            <div class="gov-detail-rule">
+              <label><input type="checkbox" id="gov_dependencies_known" onchange="scoreGovernanceOnly()"> Dependencies are known</label>
+              <textarea id="gov_dependencies_known_detail" placeholder="Add dependency detail: systems, vendors, teams, blockers, upstream/downstream dependencies..." oninput="scoreGovernanceOnly()"></textarea>
+            </div>
+            <div class="gov-detail-rule">
+              <label><input type="checkbox" id="gov_data_available" onchange="scoreGovernanceOnly()"> Data / system access is available</label>
+              <textarea id="gov_data_available_detail" placeholder="Add data/access detail: source systems, Smartsheet/Jira/UIM data, access constraints, data quality concerns..." oninput="scoreGovernanceOnly()"></textarea>
+            </div>
+            <div class="gov-detail-rule">
+              <label><input type="checkbox" id="gov_api_ready" onchange="scoreGovernanceOnly()"> API / integration path is ready</label>
+              <textarea id="gov_api_ready_detail" placeholder="Add API/integration detail: known APIs, integration owner, authentication, environments, interface gaps..." oninput="scoreGovernanceOnly()"></textarea>
+            </div>
+            <div class="gov-detail-rule">
+              <label><input type="checkbox" id="gov_nfr_defined" onchange="scoreGovernanceOnly()"> NFRs are understood</label>
+              <textarea id="gov_nfr_defined_detail" placeholder="Add NFR detail: performance, security, audit, availability, compliance, operational support requirements..." oninput="scoreGovernanceOnly()"></textarea>
+            </div>
+          </div>
+          <h3>WSJF Scoring</h3>
+          <div class="formgrid">
+            <div><label class="label">Business Value</label><input id="gov_business_value" type="number" min="1" max="10" value="5" oninput="scoreGovernanceOnly()"></div>
+            <div><label class="label">Time Criticality</label><input id="gov_time_criticality" type="number" min="1" max="10" value="5" oninput="scoreGovernanceOnly()"></div>
+            <div><label class="label">Risk Reduction</label><input id="gov_risk_reduction" type="number" min="1" max="10" value="5" oninput="scoreGovernanceOnly()"></div>
+            <div><label class="label">Job Size</label><input id="gov_job_size" type="number" min="1" max="10" value="5" oninput="scoreGovernanceOnly()"></div>
+          </div>
+        </div>
+        <div class="card">
+          <h3>Decision Capture</h3>
+          <label class="label">Capacity Impact</label><select id="gov_capacity_impact" onchange="scoreGovernanceOnly()"><option>Low</option><option selected>Medium</option><option>High</option></select>
+          <label class="label">Stakeholder Decision</label><select id="gov_stakeholder_decision"><option>Commit</option><option selected>Refine</option><option>Defer</option><option>Reject</option><option>Escalate</option><option>Needs Architecture Review</option><option>Needs Business Case</option><option>Needs Capacity Trade-off</option></select>
+          <label class="label">Target PI</label><input id="gov_target_pi" placeholder="e.g. PI-2026-Q2">
+          <label class="label">Action Owner</label><input id="gov_action_owner" placeholder="Owner for next action">
+          <label class="label">Next Action</label><textarea id="gov_next_action" placeholder="What must happen next?"></textarea>
+          <label class="label">Discussion Summary</label><textarea id="gov_discussion_summary" placeholder="Meeting summary and agreed outcome"></textarea>
+          <div class="actions" style="margin-top:12px"><button class="btn ghost" onclick="checkGovernanceTemplate()">Check Governance Template</button><button class="btn secondary" onclick="scoreGovernanceOnly()">Score Only</button><button class="btn primary" onclick="submitGovernanceToRegister()">Submit to Governance Register</button></div>
+          <pre id="govResult" style="margin-top:12px"></pre>
+        </div>
+      </div>
+    </section>
+
+    <section id="manager" class="section">
+      <div class="cards"><div class="card"><div class="label">Ready for Planning</div><div id="mgrReady" class="metric">-</div></div><div class="card"><div class="label">Needs Clarification</div><div id="mgrNeeds" class="metric">-</div></div><div class="card"><div class="label">Not Ready</div><div id="mgrNotReady" class="metric">-</div></div><div class="card"><div class="label">Overloaded Resources</div><div id="mgrOverloaded" class="metric">-</div></div></div>
+      <div class="grid" style="margin-top:16px"><div class="card"><h3>Quality / Capacity Decision Matrix</h3><div id="decisionMatrix" class="scroll"></div></div><div class="card"><h3>Manager Insights</h3><div id="managerInsights" class="insight"></div></div></div>
+      <div class="card" style="margin-top:16px"><h3>Demand Queue with Quality Badges</h3><div class="scroll"><table id="managerQueue"></table></div></div>
+    </section>
+
+    <section id="capacity" class="section"><div class="card"><h3>Team Capacity</h3><p class="muted">Weighted load considers active demand count, priority, age and poor demand readiness.</p><div class="scroll"><table id="capacityTable"></table></div></div></section>
+    <section id="risk" class="section"><div class="card"><h3>Risk Control Panel</h3><p class="muted">Highlights demands with weak readiness, overdue dates, aging or overloaded assignees.</p><div id="v8RiskList" class="scroll"></div></div></section>
+
+    <section id="register" class="section">
+      <div class="card"><h3>Demand Register</h3><div class="toolbar"><input id="tableSearch" placeholder="Search current register..." oninput="renderTable()"><select id="visibleLimit" onchange="renderTable()"><option>100</option><option>250</option><option>500</option></select><button class="btn secondary" onclick="loadAll()">Reload</button></div><div class="scroll"><table id="rowsTable"></table></div></div>
+    </section>
+
+    <section id="add" class="section">
+      <div class="card"><h3>Add New Demand</h3><p class="muted">Generated from your live Smartsheet columns. Fill only the columns required for your intake process.</p><form id="addForm" class="formgrid"></form><div style="margin-top:12px"><button type="button" class="btn primary" onclick="submitDemand()">Create Demand</button></div><pre id="addResult" style="display:none"></pre></div>
+    </section>
+  </main>
+</div>
+
+<div id="detailModal" class="modal">
+  <div class="detail-panel">
+    <div class="detail-head"><div><h3 id="detailTitle" style="margin:0">Demand Detail</h3><p id="detailSub" class="muted" style="margin:5px 0 0">Select a demand to view and update all Smartsheet columns.</p></div><div class="actions"><button class="btn ghost" onclick="reloadCurrentDetail()">Reload Detail</button><button class="btn primary" onclick="saveDemandDetail()">Save Changes to Smartsheet</button><button class="btn ghost" onclick="closeDetail()">Close</button></div></div>
+    <div class="detail-body"><div class="detail-layout"><div><h3 style="margin-top:0">Demand Fields</h3><div id="detailFields" class="detail-grid"></div></div><aside class="comments-panel"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center"><div><h3 style="margin:0">Comments</h3><p class="muted" style="margin:4px 0 0">Row-level Smartsheet discussions, not sheet columns.</p></div><button class="btn ghost mini" onclick="loadComments()">Refresh</button></div><div id="commentsStatus" class="muted" style="margin-top:10px">Select a demand to load comments.</div><div id="commentsList" class="comment-list"></div><div class="comment-box"><textarea id="newCommentText" placeholder="Add a Smartsheet comment for this demand..."></textarea><button class="btn primary" onclick="addComment()">Add Comment to Smartsheet</button></div></aside></div></div>
+    <div class="detail-foot"><span id="detailStatus" class="muted">No demand loaded.</span><span class="muted">Locked/system columns are shown as read-only.</span></div>
+  </div>
+</div>
+<div id="toast" class="toast"></div>
+
+<script>
+let SHEET=null, DASH=null, FILTERS=null, charts={}, ruleSeq=0, CURRENT_DASH_SOURCE='full', CURRENT_DETAIL=null, DETAIL_DIRTY={}, CURRENT_GOV_ROW=null;
+const OPERATORS=[['contains','contains'],['equals','equals'],['not_equals','not equals'],['not_contains','does not contain'],['starts_with','starts with'],['ends_with','ends with'],['blank','is blank'],['not_blank','is not blank'],['greater_than','greater than'],['less_than','less than'],['greater_or_equal','greater or equal'],['less_or_equal','less or equal'],['date_after','date after'],['date_before','date before'],['date_on','date on']];
+const titles={dashboard:['Executive Dashboard','Portfolio health, workload, aging, risk and demand throughput view.'],interrogate:['Interrogate','Build column-specific filters and drive dashboard insights from the result set.'],governance:['Governance Control Tower','Live RTE stakeholder discussion, readiness, WSJF and Governance Register submission.'],manager:['Manager View','Capacity, quality and readiness cockpit for daily demand management.'],capacity:['Capacity','Team workload, weighted load, overload and WIP risk view.'],risk:['Risk','Prioritised risk panel based on readiness, aging and capacity risk.'],register:['Demand Register','Select a demand, inspect all details, update fields and write back to Smartsheet.'],add:['Add Demand','Create a new demand directly in Smartsheet.']};
+function show(id,btn){document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));document.getElementById(id).classList.add('active');document.querySelectorAll('.nav button').forEach(b=>b.classList.remove('active'));if(btn&&btn.tagName==='BUTTON')btn.classList.add('active');document.getElementById('pageTitle').textContent=titles[id][0];document.getElementById('pageSub').textContent=titles[id][1];}
+async function loadAll(){setLoad(true);try{const [sheet,dash,sug]=await Promise.all([fetch('/api/sheet').then(ok),fetch('/api/dashboard').then(ok),fetch('/api/interrogate/suggestions').then(ok)]);SHEET=sheet;DASH=dash;FILTERS=sug.filters;CURRENT_DASH_SOURCE='full';renderDashboard();renderForm();renderTable();renderGovernanceSearch();renderSuggestions(sug.suggestions);if(!document.querySelector('#rules .filter-rule')) addRule();updateBanner();}catch(e){alert('Failed to load data: '+e.message)}finally{setLoad(false)}}
+async function ok(r){if(!r.ok){let msg=await r.text();throw new Error(r.status+' '+r.statusText+' '+msg)}return r.json()} function setLoad(v){document.getElementById('loading').classList.toggle('on',v)}
+function metric(id,val,suffix=''){let el=document.getElementById(id); if(el) el.textContent=(val??0)+suffix}
+function renderDashboard(){const m=DASH.metrics;metric('mTotal',m.total_demands);metric('mOpen',m.open_demands);metric('mClosed',m.closed_demands);metric('mOverdue',m.overdue_demands);metric('mAging',m.aging_over_30);metric('mAvg',m.avg_age_open,'d');metric('mReady',m.ready_percent,'%');metric('mNotReady',m.not_ready);metric('mHighRisk',m.high_risk);metric('mTeamLoad',m.team_load_percent,'%');draw('healthChart','doughnut',DASH.charts.health);draw('priorityChart','bar',DASH.charts.priority);draw('statusChart','bar',DASH.charts.status);draw('assigneeChart','bar',DASH.charts.assignee);draw('ageChart','bar',DASH.charts.age_bucket);draw('readinessChart','doughnut',DASH.charts.readiness);draw('confidenceChart','bar',DASH.charts.confidence);renderRisk();renderV8Views();updateBanner();}
+function draw(id,type,items){let ctx=document.getElementById(id); if(!ctx) return; if(charts[id])charts[id].destroy();charts[id]=new Chart(ctx,{type:type,data:{labels:(items||[]).map(x=>x.name),datasets:[{label:'Count',data:(items||[]).map(x=>x.value)}]},options:{responsive:true,plugins:{legend:{display:type==='doughnut'?true:false}},scales:type==='bar'?{y:{beginAtZero:true}}:{}}});}
+function renderRisk(){const div=document.getElementById('riskList');if(!DASH.risk_items.length){div.innerHTML='<p class="muted">No open risk items found.</p>';return}div.innerHTML='<table><thead><tr><th>Health</th><th>Age</th><th>Key details</th><th>Action</th></tr></thead><tbody>'+DASH.risk_items.map(x=>`<tr><td><span class="pill health-${x.health}">${x.health}</span></td><td>${x.age_days||''}</td><td>${Object.entries(x.fields).map(([k,v])=>`<b>${escapeHtml(k)}:</b> ${escapeHtml(v||'')}`).join('<br>')}</td><td><button class="btn secondary mini" onclick="openGovernance(${x.row_id})">Govern</button></td></tr>`).join('')+'</tbody></table>';}
+function updateBanner(){const b=document.getElementById('filterBanner');if(CURRENT_DASH_SOURCE==='filtered'){b.classList.add('on');b.innerHTML='Dashboard is showing the filtered Interrogate result set. Click <b>Reset Dashboard</b> to return to the full Smartsheet view.';}else{b.classList.remove('on');b.innerHTML='';}}
+function clearDashboardFilter(){CURRENT_DASH_SOURCE='full';fetch('/api/dashboard').then(ok).then(d=>{DASH=d;renderDashboard();});}
+function renderSuggestions(items){document.getElementById('suggestions').innerHTML=items.map(s=>`<button class="chip" onclick="quickQuery('${esc(s)}')">${escapeHtml(s)}</button>`).join('')}
+function quickQuery(s){clearRules();const keys=SHEET.key_columns||{};if(s.toLowerCase().includes('overdue'))addRule('_health','equals','Overdue');else if(s.toLowerCase().includes('older than 30'))addRule('_age_days','greater_than','30');else if(s.toLowerCase().includes('blank assignee'))addRule(keys.assignee||'Assignee','blank','');else if(s.toLowerCase().includes('high priority')){addRule(keys.priority||'Priority','contains','High');addRule('_health','not_equals','Closed');}else addRule(keys.demand||SHEET.column_titles[0],'contains',s);applyFilter(true);}
+function addRule(column='',operator='contains',value=''){const id=++ruleSeq;const cols=[...(SHEET?.column_titles||[]),'_health','_age_days','_age_bucket','_is_overdue','_quality_score','_readiness','_confidence'];const html=`<div class="filter-rule" data-rule="${id}"><div class="filter-head"><b>Rule ${id}</b><button class="danger mini" onclick="removeRule(${id})">Remove</button></div><div class="filterbar"><select class="rule-col">${cols.map(c=>`<option ${c===column?'selected':''}>${escapeHtml(c)}</option>`).join('')}</select><select class="rule-op">${OPERATORS.map(([v,t])=>`<option value="${v}" ${v===operator?'selected':''}>${t}</option>`).join('')}</select><input class="rule-val" placeholder="Criteria value" value="${escapeHtml(value)}"><button class="btn ghost" onclick="previewDistinct(this)">Values</button></div><div class="muted distinct-values"></div></div>`;document.getElementById('rules').insertAdjacentHTML('beforeend',html)}
+function removeRule(id){document.querySelector(`[data-rule="${id}"]`)?.remove()} function clearRules(){document.getElementById('rules').innerHTML='';}
+function getRules(){return [...document.querySelectorAll('#rules .filter-rule')].map(el=>({column:el.querySelector('.rule-col').value,operator:el.querySelector('.rule-op').value,value:el.querySelector('.rule-val').value})).filter(r=>r.column && (r.value || ['blank','not_blank'].includes(r.operator)));}
+async function applyFilter(updateDashboard){const rules=getRules();if(!rules.length){alert('Add at least one rule with criteria.');return}setLoad(true);try{const payload={rules,logic:document.getElementById('filterLogic').value,limit:500};const res=await fetch('/api/filter',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}).then(ok);renderFilterSummary(res.summary);renderFilterResults(res.rows,res.key_columns);document.getElementById('activeRulesText').textContent=(res.logic||'AND')+' filter: '+rules.map(r=>`${r.column} ${r.operator.replaceAll('_',' ')} ${r.value}`).join(' | ');if(updateDashboard){DASH=res.dashboard;CURRENT_DASH_SOURCE='filtered';renderDashboard();show('dashboard',document.querySelector('.nav button'));}}finally{setLoad(false)}}
+function renderFilterSummary(s){metric('fMatched',s.total_demands);metric('fOpen',s.open_demands);metric('fOverdue',s.overdue_demands);metric('fAvg',s.avg_age_open+'d')}
+function renderFilterResults(rows,keys){const cols=visibleCols(keys);let html='<thead><tr>'+cols.map(c=>`<th>${escapeHtml(c)}</th>`).join('')+'<th>Health</th><th>Age</th><th>Quality</th><th>Action</th></tr></thead><tbody>';html+=rows.map(r=>'<tr>'+cols.map(c=>`<td>${escapeHtml(r[c]??'')}</td>`).join('')+`<td><span class="pill health-${r._health}">${r._health||''}</span></td><td>${r._age_days||''}</td><td>${r._quality_score??''}% ${r._readiness?'<br><span class="pill">'+escapeHtml(r._readiness)+'</span>':''}</td><td><button class="btn soft mini" onclick="openDemandDetail(${r._row_id})">Open</button> <button class="btn secondary mini" onclick="openGovernance(${r._row_id})">Govern</button></td></tr>`).join('');document.getElementById('filterResults').innerHTML=html+'</tbody>';}
+function previewDistinct(btn){const el=btn.closest('.filter-rule');const col=el.querySelector('.rule-col').value;const vals=[...new Set((SHEET.rows||[]).map(r=>r[col]).filter(v=>v!==undefined&&v!==null&&String(v).trim()!==''))].slice(0,25);el.querySelector('.distinct-values').innerHTML=vals.length?'<b>Sample values:</b> '+vals.map(v=>`<button class="chip mini" onclick="setRuleValue(this,'${esc(v)}')">${escapeHtml(v)}</button>`).join(' '):'No sample values found.'}
+function setRuleValue(btn,v){btn.closest('.filter-rule').querySelector('.rule-val').value=v;}
+
+function renderV8Views(){const v8=(DASH&&DASH.v8)||{}; const sum=v8.summary||{}; const cap=(v8.capacity||{}).team||[]; const rows=v8.rows||[];metric('mgrReady',sum.ready); metric('mgrNeeds',sum.needs_clarification); metric('mgrNotReady',sum.not_ready); metric('mgrOverloaded',sum.overloaded_resources);renderCapacityTable(cap); renderManagerQueue(rows); renderDecisionMatrix(sum,cap); renderManagerInsights(sum,cap); renderV8Risk(v8.risk_items||[]);}
+function riskClass(r){return r==='High'?'health-Overdue':(r==='Medium'?'health-Aging':'health-Healthy')}
+function renderCapacityTable(team){let html='<thead><tr><th>Assignee</th><th>Active</th><th>Overdue</th><th>Avg Age</th><th>Weighted Load</th><th>Load %</th><th>Risk</th><th>Action</th></tr></thead><tbody>';html+=team.map(r=>`<tr><td>${escapeHtml(r.assignee)}</td><td>${r.active}</td><td>${r.overdue}</td><td>${r.avg_age}d</td><td>${r.weighted_load}</td><td><b>${r.load_percent}%</b></td><td><span class="pill ${riskClass(r.risk)}">${r.risk}</span></td><td><button class="btn soft mini" onclick="filterAssignee('${esc(r.assignee)}')">View Demands</button></td></tr>`).join('');document.getElementById('capacityTable').innerHTML=html+'</tbody>';}
+function filterAssignee(name){show('interrogate',document.querySelectorAll('.nav button')[1]);clearRules();addRule((SHEET.key_columns||{}).assignee||'Assignee','equals',name);applyFilter(true);}
+function renderManagerQueue(rows){const keys=(SHEET&&SHEET.key_columns)||{};const cols=visibleCols(keys).slice(0,6);let html='<thead><tr>'+cols.map(c=>`<th>${escapeHtml(c)}</th>`).join('')+'<th>Quality</th><th>Readiness</th><th>Confidence</th><th>Reason</th><th>Action</th></tr></thead><tbody>';html+=rows.slice(0,120).map(r=>'<tr>'+cols.map(c=>`<td>${escapeHtml(r[c]??'')}</td>`).join('')+`<td><b>${r._quality_score??''}%</b></td><td><span class="pill ${r._readiness==='Ready'?'health-Healthy':(r._readiness==='Not Ready'?'health-Overdue':'health-Aging')}">${escapeHtml(r._readiness||'')}</span></td><td>${escapeHtml(r._confidence||'')}</td><td>${escapeHtml(r._quality_reason||'')}</td><td><button class="btn soft mini" onclick="openDemandDetail(${r._row_id})">Open</button> <button class="btn secondary mini" onclick="openGovernance(${r._row_id})">Govern</button></td></tr>`).join('');document.getElementById('managerQueue').innerHTML=html+'</tbody>';}
+function renderDecisionMatrix(sum,cap){const load=sum.team_load_percent||0;const ready=sum.ready_percent||0;let quality=ready>=70?'High':(ready>=40?'Medium':'Low');let capacity=load<65?'Low':(load<100?'Medium':'High');let decision='';if(quality==='High'&&capacity==='Low')decision='Ready for planning';else if(quality==='High'&&capacity==='High')decision='Good quality but overloaded';else if(quality==='Low'&&capacity==='High')decision='Critical: poor quality + overloaded';else if(quality==='Low')decision='Improve demand quality before commitment';else decision='Watch and prioritise';document.getElementById('decisionMatrix').innerHTML=`<div class="summary-strip"><div><span class="label">Quality</span><b>${quality}</b></div><div><span class="label">Capacity</span><b>${capacity}</b></div><div><span class="label">Decision</span><b style="font-size:18px">${decision}</b></div><div><span class="label">Team Load</span><b>${load}%</b></div></div><p class="muted">Matrix uses readiness percentage and weighted team load from active Smartsheet demands.</p>`;}
+function renderManagerInsights(sum,cap){let txt=[];if(sum.not_ready)txt.push(`<b>${sum.not_ready}</b> demands are not ready for planning.`);if(sum.needs_clarification)txt.push(`<b>${sum.needs_clarification}</b> need clarification.`);if(sum.overloaded_resources)txt.push(`<b>${sum.overloaded_resources}</b> resources are overloaded.`);if(sum.high_risk)txt.push(`<b>${sum.high_risk}</b> high-risk demands need manager attention.`);if(!txt.length)txt.push('The current demand set looks stable based on quality, aging and capacity indicators.');document.getElementById('managerInsights').innerHTML='<ul><li>'+txt.join('</li><li>')+'</li></ul>';}
+function renderV8Risk(items){let html=(items||[]).map(x=>`<div class="card result-card"><b>Row ${x.row_number||''} - Quality ${x.quality_score}% - ${escapeHtml(x.readiness)}</b><p class="muted">Confidence: ${escapeHtml(x.confidence)} - Capacity Risk: ${escapeHtml(x.capacity_risk)}</p><p>${escapeHtml(x.reason||'')}</p><button class="btn soft mini" onclick="openDemandDetail(${x.row_id})">Open Demand</button> <button class="btn secondary mini" onclick="openGovernance(${x.row_id})">Govern</button></div>`).join('');document.getElementById('v8RiskList').innerHTML=html||'<p class="muted">No risk items found.</p>';}
+
+function renderTable(){if(!SHEET)return;let q=(document.getElementById('tableSearch')?.value||'').toLowerCase();let limit=parseInt(document.getElementById('visibleLimit')?.value||'100');let rows=SHEET.rows.filter(r=>!q||Object.values(r).join(' ').toLowerCase().includes(q)).slice(0,limit);let cols=visibleCols();let html='<thead><tr>'+cols.map(c=>`<th>${escapeHtml(c)}</th>`).join('')+'<th>Health</th><th>Actions</th></tr></thead><tbody>';for(const r of rows){html+='<tr>'+cols.map(c=>`<td>${escapeHtml(r[c]??'')}</td>`).join('')+`<td><span class="pill health-${r._health}">${r._health||''}</span></td><td><button class="btn soft mini" onclick="openDemandDetail(${r._row_id})">Open / Edit</button> <button class="btn secondary mini" onclick="openGovernance(${r._row_id})">Govern</button> <button class="danger mini" onclick="deleteRow(${r._row_id})">Delete</button></td></tr>`}document.getElementById('rowsTable').innerHTML=html+'</tbody>';}
+function visibleCols(keys=SHEET?.key_columns||{}){let preferred=[keys.reference,keys.demand,keys.initiative_status,keys.status,keys.priority,keys.assignee,keys.requestor,keys.created,keys.due,keys.portfolio].filter(Boolean);let extra=(SHEET?.column_titles||[]).filter(c=>!preferred.includes(c)).slice(0,5);return [...preferred,...extra].slice(0,10)}
+function renderForm(){let form=document.getElementById('addForm');form.innerHTML='';(SHEET.column_titles||[]).forEach(c=>{let d=document.createElement('div');d.innerHTML=`<label class="label">${escapeHtml(c)}</label><input name="${escapeHtml(c)}" placeholder="${escapeHtml(c)}">`;form.appendChild(d)})}
+async function submitDemand(){let values={};new FormData(document.getElementById('addForm')).forEach((v,k)=>{if(v)values[k]=v});let res=await fetch('/api/rows',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({values})}).then(ok);let pre=document.getElementById('addResult');pre.style.display='block';pre.textContent=JSON.stringify(res,null,2);await loadAll();}
+async function deleteRow(rowId){if(!confirm('Delete this row from Smartsheet?'))return;await fetch(`/api/rows/${rowId}`,{method:'DELETE'});await loadAll();}
+
+async function openDemandDetail(rowId){setLoad(true);try{CURRENT_DETAIL=await fetch(`/api/rows/${rowId}`).then(ok);DETAIL_DIRTY={};renderDemandDetail();document.getElementById('detailModal').classList.add('on');await loadComments();}catch(e){alert('Could not load demand detail: '+e.message)}finally{setLoad(false)}}
+function renderDemandDetail(){const d=CURRENT_DETAIL;if(!d)return;const keys=d.key_columns||{};const ref=keys.reference && d.record[keys.reference] ? d.record[keys.reference] : ('Row '+d.row_number);const titleCol=keys.demand;document.getElementById('detailTitle').textContent='Demand Detail: '+ref;document.getElementById('detailSub').textContent=(titleCol&&d.record[titleCol]?d.record[titleCol]+' - ':'')+'Row '+d.row_number+' - Modified '+(d.modified_at||'');const body=document.getElementById('detailFields');body.innerHTML=d.fields.map(f=>fieldEditor(f)).join('');const q=d.quality||{};document.getElementById('detailStatus').innerHTML='Loaded '+d.fields.length+' fields. <b>Quality:</b> '+(q.quality_score??'-')+'% - '+escapeHtml(q.readiness||'')+' - '+escapeHtml(q.confidence||'')+'<br><span class="muted">'+escapeHtml(q.reason||'Change any editable field and click Save Changes to Smartsheet.')+'</span>';}
+function fieldEditor(f){const title=escapeHtml(f.title||'');const val=f.displayValue??f.value??'';const locked=f.locked;let editor='';const common=`data-title="${title}" onchange="markDirty(this)" oninput="markDirty(this)" ${locked?'disabled':''}`; if(f.options&&f.options.length){editor=`<select ${common}><option value=""></option>${f.options.map(o=>`<option value="${escapeHtml(o)}" ${String(o)===String(val)?'selected':''}>${escapeHtml(o)}</option>`).join('')}</select>`;} else if((f.type||'').includes('DATE')){let v=String(val||'').slice(0,10);editor=`<input type="date" value="${escapeHtml(v)}" ${common}>`;} else if((f.type||'').includes('TEXT')||String(val).length>80){editor=`<textarea ${common}>${escapeHtml(val)}</textarea>`;} else {editor=`<input value="${escapeHtml(val)}" ${common}>`;} return `<div class="field-card ${locked?'locked':''}"><label class="label">${title}</label>${editor}<div class="field-meta">Type: ${escapeHtml(f.type||'unknown')} ${locked?' - read-only':''}</div></div>`;}
+function markDirty(el){const title=el.dataset.title;DETAIL_DIRTY[title]=el.value;el.classList.add('dirty');document.getElementById('detailStatus').textContent=Object.keys(DETAIL_DIRTY).length+' unsaved change(s).';}
+async function saveDemandDetail(){if(!CURRENT_DETAIL)return;const values={};for(const [k,v] of Object.entries(DETAIL_DIRTY)){values[k]=v;}if(!Object.keys(values).length){toast('No changes to save.');return;}setLoad(true);try{await fetch(`/api/rows/${CURRENT_DETAIL.row_id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({values})}).then(ok);toast('Saved to Smartsheet successfully.');DETAIL_DIRTY={};await reloadCurrentDetail(false);await loadAll();}catch(e){alert('Save failed: '+e.message)}finally{setLoad(false)}}
+async function reloadCurrentDetail(showMsg=true){if(!CURRENT_DETAIL)return;const id=CURRENT_DETAIL.row_id;CURRENT_DETAIL=await fetch(`/api/rows/${id}`).then(ok);DETAIL_DIRTY={};renderDemandDetail();await loadComments();if(showMsg)toast('Demand detail reloaded.');}
+async function loadComments(){if(!CURRENT_DETAIL)return;const status=document.getElementById('commentsStatus');const list=document.getElementById('commentsList');status.textContent='Loading comments...';list.innerHTML='';try{const res=await fetch(`/api/rows/${CURRENT_DETAIL.row_id}/comments`).then(ok);status.textContent=res.count ? `${res.count} comment(s) loaded from Smartsheet.` : 'No comments found for this demand.';list.innerHTML=(res.comments||[]).map(c=>`<div class="comment-item"><div class="comment-meta"><b>${escapeHtml(c.created_by||'Smartsheet User')}</b> - ${escapeHtml(c.created_at||'')}</div><div class="comment-text">${escapeHtml(c.text||'')}</div></div>`).join('');}catch(e){status.textContent='Could not load comments: '+e.message;}}
+async function addComment(){if(!CURRENT_DETAIL)return;const box=document.getElementById('newCommentText');const text=box.value.trim();if(!text){toast('Enter a comment first.');return;}setLoad(true);try{await fetch(`/api/rows/${CURRENT_DETAIL.row_id}/comments`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text})}).then(ok);box.value='';toast('Comment added to Smartsheet.');await loadComments();}catch(e){alert('Could not add comment: '+e.message)}finally{setLoad(false)}}
+function closeDetail(){if(Object.keys(DETAIL_DIRTY).length&&!confirm('Close without saving your changes?'))return;document.getElementById('detailModal').classList.remove('on');}
+
+function openGovernance(rowId){show('governance',document.querySelectorAll('.nav button')[2]);loadGovernanceDemand(rowId);}
+function renderGovernanceSearch(){if(!SHEET)return;const q=(document.getElementById('govSearch')?.value||'').toLowerCase();const keys=SHEET.key_columns||{};const cols=visibleCols(keys).slice(0,6);const rows=(SHEET.rows||[]).filter(r=>!q||Object.values(r).join(' ').toLowerCase().includes(q)).slice(0,100);let html='<thead><tr>'+cols.map(c=>`<th>${escapeHtml(c)}</th>`).join('')+'<th>Action</th></tr></thead><tbody>';html+=rows.map(r=>'<tr>'+cols.map(c=>`<td>${escapeHtml(r[c]??'')}</td>`).join('')+`<td><button class="btn secondary mini" onclick="loadGovernanceDemand(${r._row_id})">Discuss</button></td></tr>`).join('');document.getElementById('govSearchTable').innerHTML=html+'</tbody>';}
+async function loadGovernanceDemand(rowId){setLoad(true);try{CURRENT_GOV_ROW=rowId;const d=await fetch(`/api/rows/${rowId}`).then(ok);const keys=d.key_columns||{};const ref=keys.reference&&d.record[keys.reference]?d.record[keys.reference]:('Row '+d.row_number);const title=keys.demand&&d.record[keys.demand]?d.record[keys.demand]:'';const status=keys.initiative_status&&d.record[keys.initiative_status]?d.record[keys.initiative_status]:(keys.status&&d.record[keys.status]?d.record[keys.status]:'');const assignee=keys.assignee&&d.record[keys.assignee]?d.record[keys.assignee]:'';const requestor=keys.requestor&&d.record[keys.requestor]?d.record[keys.requestor]:'';document.getElementById('govRow').textContent=ref;document.getElementById('govDemandContext').innerHTML=`<b>${escapeHtml(ref)}</b><br>${escapeHtml(title)}<br><br><span class="pill">${escapeHtml(status)}</span><br><br><b>Owner:</b> ${escapeHtml(assignee)}<br><b>Requestor:</b> ${escapeHtml(requestor)}<br><b>Row:</b> ${d.row_id}`;const rec=d.record||{};setVal('gov_business_outcome',rec['Business Outcome']||'');setVal('gov_urgency_reason',rec['Urgency Reason']||'');setVal('gov_meeting_attendees',rec['Meeting Attendees']||'');setVal('gov_discussion_summary',rec['RTE Discussion Summary']||'');setVal('gov_next_action',rec['Next Action']||'');setVal('gov_action_owner',rec['Action Owner']||'');setVal('gov_target_pi',rec['Target PI']||'');setVal('gov_scope_clear_detail',rec['Scope Clear Detail']||'');setVal('gov_dependencies_known_detail',rec['Dependencies Known Detail']||'');setVal('gov_data_available_detail',rec['Data Available Detail']||'');setVal('gov_api_ready_detail',rec['API Ready Detail']||'');setVal('gov_nfr_defined_detail',rec['NFR Defined Detail']||'');setVal('gov_business_value',rec['Business Value']||5);setVal('gov_time_criticality',rec['Time Criticality']||5);setVal('gov_risk_reduction',rec['Risk Reduction']||5);setVal('gov_job_size',rec['Job Size']||5);setVal('gov_capacity_impact',rec['Capacity Impact']||'Medium');setVal('gov_stakeholder_decision',rec['Stakeholder Decision']||'Refine');scoreGovernanceOnly();}catch(e){alert('Could not load governance demand: '+e.message)}finally{setLoad(false)}}
+function setVal(id,value){const el=document.getElementById(id);if(el)el.value=value;}
+function governancePayload(){return {business_outcome:document.getElementById('gov_business_outcome').value,urgency_reason:document.getElementById('gov_urgency_reason').value,discussion_summary:document.getElementById('gov_discussion_summary').value,meeting_attendees:document.getElementById('gov_meeting_attendees').value,scope_clear:document.getElementById('gov_scope_clear').checked,scope_clear_detail:document.getElementById('gov_scope_clear_detail').value,dependencies_known:document.getElementById('gov_dependencies_known').checked,dependencies_known_detail:document.getElementById('gov_dependencies_known_detail').value,data_available:document.getElementById('gov_data_available').checked,data_available_detail:document.getElementById('gov_data_available_detail').value,api_ready:document.getElementById('gov_api_ready').checked,api_ready_detail:document.getElementById('gov_api_ready_detail').value,nfr_defined:document.getElementById('gov_nfr_defined').checked,nfr_defined_detail:document.getElementById('gov_nfr_defined_detail').value,business_value:parseInt(document.getElementById('gov_business_value').value||'1'),time_criticality:parseInt(document.getElementById('gov_time_criticality').value||'1'),risk_reduction:parseInt(document.getElementById('gov_risk_reduction').value||'1'),job_size:parseInt(document.getElementById('gov_job_size').value||'1'),capacity_impact:document.getElementById('gov_capacity_impact').value,stakeholder_decision:document.getElementById('gov_stakeholder_decision').value,next_action:document.getElementById('gov_next_action').value,action_owner:document.getElementById('gov_action_owner').value,target_pi:document.getElementById('gov_target_pi').value};}
+async function scoreGovernanceOnly(){
+  const out=document.getElementById('govResult');
+  if(out) out.textContent='Scoring...';
+  try{
+    const res=await fetch('/api/governance/score',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(governancePayload())}).then(ok);
+    document.getElementById('govReadiness').textContent=res.readiness.status+' '+res.readiness.score+'%';
+    document.getElementById('govWSJF').textContent=res.wsjf_score;
+    document.getElementById('govRecommendation').textContent=res.rte_recommendation;
+    out.textContent=JSON.stringify(res,null,2);
+    return res;
+  }catch(e){
+    if(out) out.textContent='Scoring error: '+e.message;
+    console.error(e);
+  }
+}
+
+async function checkGovernanceTemplate(){
+  setLoad(true);
+  try{
+    const res = await fetch('/api/governance/template-status').then(ok);
+    document.getElementById('govResult').textContent = JSON.stringify(res, null, 2);
+    if(res.is_ready){
+      toast('Governance Register template is ready.');
+    } else {
+      alert('Governance Register is missing ' + res.missing_columns.length + ' column(s). See output box for details.');
+    }
+  }catch(e){
+    alert('Could not check Governance Register template: ' + e.message);
+  }finally{
+    setLoad(false);
+  }
+}
+
+async function submitGovernanceToRegister(){if(!CURRENT_GOV_ROW){alert('Select a demand first.');return;}setLoad(true);try{const res=await fetch(`/api/governance/submit/${CURRENT_GOV_ROW}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(governancePayload())}).then(ok);document.getElementById('govReadiness').textContent=res.readiness.status+' '+res.readiness.score+'%';document.getElementById('govWSJF').textContent=res.wsjf_score;document.getElementById('govRecommendation').textContent=res.rte_recommendation;document.getElementById('govResult').textContent=JSON.stringify(res,null,2);toast('Governance record submitted to the Governance Register.');await loadAll();}catch(e){alert('Governance submission failed: '+e.message)}finally{setLoad(false)}}
+
+function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('on');setTimeout(()=>t.classList.remove('on'),2600)}
+function esc(s){return String(s??"").replace(/\\/g,"\\\\").replace(/'/g,"\\u0027").replace(/\r?\n/g," ")}
+function escapeHtml(s){return String(s??"").replace(/[&<>\"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]))}
+loadAll();
+</script>
+</body>
+</html>
